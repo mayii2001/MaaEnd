@@ -1,6 +1,10 @@
 {
     "EnterCameraModeButton": {
         "threshold": 0.7,
-        "action": "Click"
+        "action": "Click",
+        "template": [
+            "Common/Button/EnterCameraModeButton.png",
+            "Common/Button/EnterCameraModeButton2.png"
+        ]
     }
 }

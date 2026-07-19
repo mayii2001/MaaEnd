@@ -56,3 +56,10 @@
   2. 注意区分「缩放不匹配」与「图标本来不同」：轮盘槽位按钮外观随功能变化，属于后者，不能用补模板解决（见第 4 节轮盘拖动方案）；
   3. 本地 `tools/calibrate_hud.py` 校准时的匹配分同样受 1.25 倍影响，PC 模板校准会失败，所以校准模板也要用真机裁取的版本。
 - **验证方法**：用 numpy 手写 NCC（`TM_CCOEFF_NORMED` 等价）在 `on_error` 截图上复算分数，即可近似 MAA 的 TemplateMatcher 结果（已验证两者一致）。
+
+## 五、vivo 虚拟屏导致 ADB 截图失败（MaaToolkit.dll 补丁）
+
+- **现象**：部分 vivo 手机存在系统虚拟屏 `vivo_rms_screen`（见上游 issue [MaaEnd/MaaEnd#4289](https://github.com/MaaEnd/MaaEnd/issues/4289)，已关闭未修），ADB 连接后截图失败。
+- **根因**：MaaFramework v5.12.1 的 `AdbDeviceFinder` 检测到相关属性后误判设备为 Androws 模拟器，强制使用 `screencap -d 90000`，在真机上无法出图。
+- **修复方式**：本分支附带修复版 DLL `patches/maafw/MaaToolkit.dll`（含新逻辑标记串 `sys.tencent.imei is set but device looks like a physical phone, skip Androws detection`，官方 v5.12.1 正式版没有），替换安装目录 `maafw/MaaToolkit.dll` 即可。详见 `patches/README.md`。
+- **本地自动打补丁机制**（不入库，仅说明）：`config/overrides/maafw/MaaToolkit.dll` + `tools/apply_local_overrides.py` 随 `startup.bat` 执行，仅当目标 DLL 缺少修复标记串时才覆盖（app 更新带来已修复新版时不降级），已经过「官方版 → apply → 恢复修复版」的模拟验证。

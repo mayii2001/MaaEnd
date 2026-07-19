@@ -1313,7 +1313,7 @@
         },
         "pre_delay": 0,
         "anchor": {
-            "__ScenePrivateMenuListEnterMenuFriendsNextAnchor": "__ScenePrivateMenuFriendsEnterMenuFriendsList"
+            "__ScenePrivateMenuListEnterMenuFriendsNextAnchor": "__ScenePrivateMenuFriendsEnterMenuFriendsListEntry"
         },
         "post_delay": 0,
         "rate_limit": 0,
@@ -1394,6 +1394,16 @@
         "post_delay": 0,
         "next": [
             "[Anchor]__ScenePrivateMenuListEnterMenuFriendsNextAnchor"
+        ]
+    },
+    "__ScenePrivateMenuFriendsEnterMenuFriendsListEntry": {
+        "desc": "进入好友列表：已在列表页则直接成功，否则点击列表入口",
+        "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 0,
+        "next": [
+            "__ScenePrivateMenuFriendsEnterMenuFriendsListSuccess",
+            "__ScenePrivateMenuFriendsEnterMenuFriendsList"
         ]
     },
     "__ScenePrivateMenuFriendsEnterMenuFriendsList": {

@@ -17,19 +17,20 @@ jobs:
           ref: v2
           fetch-depth: 0
 
-      - name: Sync v2 from upstream (fast-forward only)
+      - name: Sync v2 from upstream
         run: |
           git remote add upstream https://github.com/MaaEnd/MaaEnd.git
           git fetch upstream v2
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git merge-base --is-ancestor HEAD upstream/v2; then
-            git merge --ff-only upstream/v2
+          if git merge-base --is-ancestor upstream/v2 HEAD; then
+            echo "v2 already up to date"
+          elif git merge --no-edit upstream/v2; then
             git push origin v2
-            echo "v2 fast-forwarded"
+            echo "v2 synced"
           else
-            echo "v2 has diverged from upstream, skip (manual fix needed)"
-            exit 1
+            echo "::warning::merge conflict on v2, kept as-is; resolve manually"
+            git merge --abort
           fi
 
       - name: Merge upstream into phone-adb-adapt

@@ -1,0 +1,8 @@
+{
+    "EnvironmentMonitoringTakePhotoDirectly": {
+        "desc": "ADB 走按住拖动轮盘进拍照，跳过图标模板点击路径",
+        "next": [
+            "EnterCameraModeLongPress"
+        ]
+    }
+}

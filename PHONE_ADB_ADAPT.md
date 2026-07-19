@@ -24,21 +24,24 @@
   - `__ScenePrivateWorldEnterMenuFriendsList` 的 anchor `__ScenePrivateMenuListEnterMenuFriendsNextAnchor` 由 `__ScenePrivateMenuFriendsEnterMenuFriendsList` 改为指向新节点
 - 原因：游戏会记住子页面，当直接落在好友列表页时，入口 tab 处于选中态，与模板（未选中态）匹配失败导致卡死；新增 DirectHit 节点后，已在列表页则直接判定成功，否则再点击列表入口
 
-### 4. `EnterCameraModeButton` 真机双形态模板
+### 4. 进拍照改为轮盘拖动方案（替代图标模板点击）
 
 - 文件：
-  - `assets/resource_adb/image/Common/Button/EnterCameraModeButton.png`（替换为 swirl 形态真机截图，24x18 RGBA，裁自 1280x720 真机截图 `[1162,270]`）
-  - `assets/resource_adb/image/Common/Button/EnterCameraModeButton2.png`（新增，普通形态相机机身图标，24x18 RGBA，裁自真机截图 `[1162,271]`）
-  - `assets/resource_adb/pipeline/Common/Button/EnterCameraModeButton.json`（`template` 字段更新为上述两张图）
-- 原因：原模板是 PC 版相机机身图标，真机靠近拍摄目标时按钮渲染为圆形 swirl 提示图标，模板分仅 0.53（阈值 0.7），导致 `EnterCameraModeClick` 走不通、回退到真机不响应的按键路径。且真机上该按钮有普通（相机机身）与靠近目标（swirl）两种外观，两种外观互相匹配分也只有 0.53，单模板必然漏一种，故使用双模板
+  - `assets/resource_adb/pipeline/EnvironmentMonitoring.json`（新增）：覆盖 `EnvironmentMonitoringTakePhotoDirectly`，`next` 仅保留 `EnterCameraModeLongPress`，跳过 `EnterCameraModeClick` 的图标模板点击路径，直接走 TouchDown → TouchMove（拖向 10-11 点方向）→ TouchUp 的按住拖动链
+  - `assets/tasks/setting/Keymap.json`：移除 `KeymapGeneral` 的 `pipeline_override`（`EnterCameraModeLongPress` 的 KeyDown、`EnterCameraModeKeyUp` 的 KeyUp 两项，置为 `{}`），hotkeys 定义保留
+- 原因：
+  - 快捷道具轮盘按钮图标随最后使用的功能变化，不固定，图标模板方案不可靠；且实测普通（相机机身）与 swirl 两种外观互相匹配分仅 0.53（阈值 0.7），双模板也无法覆盖所有形态
+  - 正确交互是按住该槽位向 10-11 点方向拖动，出现拍照选项后释放。原版 `resource_adb` 已有 TouchDown/TouchMove/TouchUp 拖动链（`EnterCameraModeLongPress` → `EnterCameraModeChooseCamera` → `EnterCameraModeKeyUp`），但 Keymap 的任务级 override 会把 `EnterCameraModeLongPress`/`EnterCameraModeKeyUp` 顶成 KeyDown/KeyUp 键盘事件，真机不响应注入键盘，故移除该 override，并让 `EnvironmentMonitoringTakePhotoDirectly` 跳过 Click 路径直接进入拖动链
+- 备注：`EnterCameraModeButton.png`（swirl 形态）与 `EnterCameraModeButton2.png`（普通形态）的双形态模板文件保留，但已被本轮盘方案取代，仅作备用
 
 ## 二、本地运行机制（不入库，仅说明）
 
 以下机制只存在于本地运行目录，用于在 app 更新后自动恢复真机适配，不随本分支提交：
 
-- `config/overrides/` 目录存放 pipeline / 图片覆盖文件
-- `tools/apply_local_overrides.py` 在 `startup.bat` 启动时将覆盖深合并到 `resource_adb`，app 更新重置资源后自动恢复
+- `config/overrides/` 目录存放 pipeline / 图片覆盖文件，同时支持 `resource_adb` 与 `tasks` 目录
+- `tools/apply_local_overrides.py` 在 `startup.bat` 启动时将覆盖深合并到 `resource_adb`（及 `tasks`），app 更新重置资源后自动恢复
 - `tools/calibrate_roi.py` 用真机截图做模板匹配以校准 ROI 并写回 `config/overrides`；已有配置且自检分 ≥ 0.7 则跳过，只校准一次
+- `tools/calibrate_hud.py` 批量 HUD 校准：`calibrate_targets.json` 维护校准目标，支持绿幕模板、每目标 threshold、apply 附加写入——用槽位外圈环形模板 `QuickToolSlotRing.png`（绿幕遮挡内圈，与图标无关）定位快捷道具槽位后，同步写入 `EnterCameraModeLongPress`/`EnterCameraModeChooseCamera` 的 target 坐标，适配自定义 HUD 布局
 
 ## 三、其他本地改动（不入库）
 

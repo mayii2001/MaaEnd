@@ -16,6 +16,7 @@ jobs:
         with:
           ref: v2
           fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
 
       - name: Sync v2 from upstream
         run: |

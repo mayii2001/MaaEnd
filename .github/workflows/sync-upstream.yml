@@ -1,0 +1,45 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # 每天凌晨自动同步一次（UTC 19:17，北京 03:17）
+  workflow_dispatch: # 也允许手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v2
+          fetch-depth: 0
+
+      - name: Sync v2 from upstream (fast-forward only)
+        run: |
+          git remote add upstream https://github.com/MaaEnd/MaaEnd.git
+          git fetch upstream v2
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git merge-base --is-ancestor HEAD upstream/v2; then
+            git merge --ff-only upstream/v2
+            git push origin v2
+            echo "v2 fast-forwarded"
+          else
+            echo "v2 has diverged from upstream, skip (manual fix needed)"
+            exit 1
+          fi
+
+      - name: Merge upstream into phone-adb-adapt
+        run: |
+          git fetch origin phone-adb-adapt
+          git checkout phone-adb-adapt
+          if git merge --no-edit upstream/v2; then
+            git push origin phone-adb-adapt
+            echo "phone-adb-adapt merged with upstream/v2"
+          else
+            echo "::warning::merge conflict on phone-adb-adapt, kept as-is; resolve manually"
+            git merge --abort
+          fi

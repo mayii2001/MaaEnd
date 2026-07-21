@@ -21,6 +21,7 @@ import (
 	"github.com/MaaXYZ/MaaEnd/agent/go-service/common/listcomplete"
 	"github.com/MaaXYZ/MaaEnd/agent/go-service/common/pipelineoverride"
 	"github.com/MaaXYZ/MaaEnd/agent/go-service/common/poststop"
+	"github.com/MaaXYZ/MaaEnd/agent/go-service/common/repeataction"
 	"github.com/MaaXYZ/MaaEnd/agent/go-service/common/schedule"
 	"github.com/MaaXYZ/MaaEnd/agent/go-service/common/subtask"
 	"github.com/MaaXYZ/MaaEnd/agent/go-service/creditshopping"
@@ -68,6 +69,7 @@ func registerAll() {
 	autoalt.Register()
 	charactercontroller.Register()
 	falseaction.Register()
+	repeataction.Register()
 	poststop.Register()
 	schedule.Register()
 

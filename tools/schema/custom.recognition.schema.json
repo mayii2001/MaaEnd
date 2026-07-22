@@ -9,10 +9,10 @@
                 "AutoSellPriceCompareRecognition",
                 "AutoSellScanItemRecognition",
                 "AutoStockpile.Recognition",
-                "DailyEventGoToRecognition",
                 "EssenceFilterAfterBattleNthRecognition",
                 "EssenceGridAdvanceRecognition",
                 "EssenceGridPendingRecognition",
+                "ExpendableRecognition",
                 "ExpressionRecognition",
                 "ImageCheckNotPassedRecognition",
                 "ListCompleteRecognition",
@@ -34,7 +34,6 @@
                 "SellProductSelectBestOperator",
                 "TrialOfSwordmancy.Recognize",
                 "TrialOfSwordmancy.RecognizeAband",
-                "VisitFriendsSelectFriendRecognition",
                 "WeaponInventoryScanRecognition",
                 "SeizeDeliveryJobsFindTargetRecognition",
                 "SeizeDeliveryJobsScanTargetRecognition",
@@ -64,6 +63,45 @@
                                 "minLength": 1,
                                 "title": "Node",
                                 "description": "OCR node name, or an And node name whose native box_index target must be OCR. Compared across runs via attach.last_text on the current Custom recognition node."
+                            },
+                            "retry": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "default": 0,
+                                "title": "Retry",
+                                "description": "After OCR fingerprint equals attach.last_text, keep returning true this many times (incrementing attach.unchanged_count) before treating the list as complete. Default 0 means no retry: first unchanged hit returns false."
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": {
+                "type": "object",
+                "required": [ "custom_recognition" ],
+                "properties": { "custom_recognition": { "const": "ExpendableRecognition" } }
+            },
+            "then": {
+                "type": "object",
+                "required": [ "custom_recognition_param" ],
+                "properties": {
+                    "custom_recognition_param": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [ "candidate" ],
+                        "properties": {
+                            "candidate": {
+                                "type": "string",
+                                "minLength": 1,
+                                "title": "Candidate",
+                                "description": "OCR or And (box_index -> text OCR). That named OCR is patched with visited blacklist. Hit box is returned for Click."
+                            },
+                            "visited_node": {
+                                "type": "string",
+                                "minLength": 1,
+                                "title": "Visited Node",
+                                "description": "Optional. Node whose attach.visited is used as the shared blacklist store. Defaults to the current Custom recognition node."
                             }
                         }
                     }

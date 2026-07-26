@@ -1,51 +1,53 @@
 {
     // ===== 地区据点锚点（锚定该地区第一个据点的标签页文本） =====
-    "SellProductIn${RegionPrefix}Outpost": {
-        "desc": "在${RegionDesc}据点",
+    "SellProductInValleyIVOutpost": {
+        "desc": "在四号谷地据点",
         "recognition": "And",
         "all_of": [
             "SellProductInOutpost",
-            "SellProductCheck${AnchorLocationId}TabText"
+            "SellProductCheckRefugeeCampTabText"
         ],
         "pre_wait_freezes": 80,
         "pre_delay": 0,
         "post_delay": 0,
         "rate_limit": 0
     },
-    "SellProduct${RegionPrefix}": {
-        "desc": "${RegionDesc}售卖流程入口",
+    "SellProductValleyIV": {
+        "desc": "四号谷地售卖流程入口",
         "max_hit": 1,
         "pre_delay": 0,
         "action": "Custom",
         "custom_action": "SubTask",
         "custom_action_param": {
             "sub": [
-                "SceneEnterMenuRegionalDevelopment${RegionPrefix}"
+                "SceneEnterMenuRegionalDevelopmentValleyIV"
             ]
         },
         "post_delay": 0,
         "rate_limit": 0,
         "next": [
-            "SellProduct${RegionPrefix}Sell"
+            "SellProductValleyIVSell"
         ]
     },
-    "SellProduct${RegionPrefix}Sell": {
-        "desc": "在${RegionDesc}售卖",
+    "SellProductValleyIVSell": {
+        "desc": "在四号谷地售卖",
         "max_hit": 1,
         "pre_delay": 0,
         "action": "Custom",
         "custom_action": "SubTask",
         "custom_action_param": {
             "sub": [
-                "SceneEnterMenuRegionalDevelopment${RegionPrefix}OutpostManagement"
+                "SceneEnterMenuRegionalDevelopmentValleyIVOutpostManagement"
             ]
         },
         "post_delay": 0,
         "rate_limit": 0,
-        "next": "${SellNext}"
+        "next": [
+            "SellProductValleyIVInitializePrioritySession"
+        ]
     },
-    "SellProduct${RegionPrefix}InitializePrioritySession": {
-        "desc": "切换${RegionDesc}优先售卖配置",
+    "SellProductValleyIVInitializePrioritySession": {
+        "desc": "切换四号谷地优先售卖配置",
         "recognition": "DirectHit",
         "pre_delay": 0,
         "action": "Custom",
@@ -57,11 +59,11 @@
         "post_delay": 0,
         "rate_limit": 0,
         "next": [
-            "SellProduct${RegionPrefix}RegisterPriorityItem1"
+            "SellProductValleyIVRegisterPriorityItem1"
         ]
     },
-    "SellProduct${RegionPrefix}RegisterPriorityItem1": {
-        "desc": "注册${RegionDesc}第1个优先售卖物品",
+    "SellProductValleyIVRegisterPriorityItem1": {
+        "desc": "注册四号谷地第1个优先售卖物品",
         "recognition": "DirectHit",
         "pre_delay": 0,
         "action": "Custom",
@@ -73,11 +75,11 @@
         "post_delay": 0,
         "rate_limit": 0,
         "next": [
-            "SellProduct${RegionPrefix}RegisterPriorityItem2"
+            "SellProductValleyIVRegisterPriorityItem2"
         ]
     },
-    "SellProduct${RegionPrefix}RegisterPriorityItem2": {
-        "desc": "注册${RegionDesc}第2个优先售卖物品",
+    "SellProductValleyIVRegisterPriorityItem2": {
+        "desc": "注册四号谷地第2个优先售卖物品",
         "recognition": "DirectHit",
         "pre_delay": 0,
         "action": "Custom",
@@ -89,11 +91,11 @@
         "post_delay": 0,
         "rate_limit": 0,
         "next": [
-            "SellProduct${RegionPrefix}RegisterPriorityItem3"
+            "SellProductValleyIVRegisterPriorityItem3"
         ]
     },
-    "SellProduct${RegionPrefix}RegisterPriorityItem3": {
-        "desc": "注册${RegionDesc}第3个优先售卖物品",
+    "SellProductValleyIVRegisterPriorityItem3": {
+        "desc": "注册四号谷地第3个优先售卖物品",
         "recognition": "DirectHit",
         "pre_delay": 0,
         "action": "Custom",
@@ -105,11 +107,11 @@
         "post_delay": 0,
         "rate_limit": 0,
         "next": [
-            "SellProduct${RegionPrefix}RegisterPriorityItem4"
+            "SellProductValleyIVRegisterPriorityItem4"
         ]
     },
-    "SellProduct${RegionPrefix}RegisterPriorityItem4": {
-        "desc": "注册${RegionDesc}第4个优先售卖物品",
+    "SellProductValleyIVRegisterPriorityItem4": {
+        "desc": "注册四号谷地第4个优先售卖物品",
         "recognition": "DirectHit",
         "pre_delay": 0,
         "action": "Custom",
@@ -121,11 +123,11 @@
         "post_delay": 0,
         "rate_limit": 0,
         "next": [
-            "SellProduct${RegionPrefix}RegisterPriorityItem5"
+            "SellProductValleyIVRegisterPriorityItem5"
         ]
     },
-    "SellProduct${RegionPrefix}RegisterPriorityItem5": {
-        "desc": "注册${RegionDesc}第5个优先售卖物品",
+    "SellProductValleyIVRegisterPriorityItem5": {
+        "desc": "注册四号谷地第5个优先售卖物品",
         "recognition": "DirectHit",
         "pre_delay": 0,
         "action": "Custom",
@@ -137,11 +139,11 @@
         "post_delay": 0,
         "rate_limit": 0,
         "next": [
-            "SellProduct${RegionPrefix}RegisterPriorityItem6"
+            "SellProductValleyIVRegisterPriorityItem6"
         ]
     },
-    "SellProduct${RegionPrefix}RegisterPriorityItem6": {
-        "desc": "注册${RegionDesc}第6个优先售卖物品",
+    "SellProductValleyIVRegisterPriorityItem6": {
+        "desc": "注册四号谷地第6个优先售卖物品",
         "recognition": "DirectHit",
         "pre_delay": 0,
         "action": "Custom",
@@ -153,11 +155,11 @@
         "post_delay": 0,
         "rate_limit": 0,
         "next": [
-            "SellProduct${RegionPrefix}PrepareOperatorCache"
+            "SellProductValleyIVPrepareOperatorCache"
         ]
     },
-    "SellProduct${RegionPrefix}PrepareOperatorCache": {
-        "desc": "${RegionDesc}售卖前准备联络干员缓存",
+    "SellProductValleyIVPrepareOperatorCache": {
+        "desc": "四号谷地售卖前准备联络干员缓存",
         "recognition": "DirectHit",
         "pre_delay": 0,
         "action": "Custom",
@@ -169,6 +171,12 @@
         },
         "post_delay": 0,
         "rate_limit": 0,
-        "next": "${PrepareNext}"
+        "next": [
+            "[JumpBack]SellProductRefugeeCamp",
+            "[JumpBack]SellProductInfraStation",
+            "[JumpBack]SellProductReconstructionHQ",
+            "SellProductLoop",
+            "[JumpBack]SceneEnterMenuRegionalDevelopment"
+        ]
     }
 }

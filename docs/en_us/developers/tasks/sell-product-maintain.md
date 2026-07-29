@@ -227,18 +227,18 @@ Independent reserve rules provide six slots. Each stable `itemId` can use either
 
 The generator lives under `tools/pipeline-generate/SellProduct/`. `model.mjs` defines outpost IDs, multilingual OCR candidates, task options, and template data from zmdmap. `selection-data.mjs` produces the Go deployment resource at `assets/data/SellProduct/selection_data.json`. `tools/pipeline-generate/data/` is the generator's source-data directory.
 
-| Maintenance entry                                    | Generated artifact                                                       |
+| Maintenance entry | Generated artifact |
 | ---------------------------------------------------- | ------------------------------------------------------------------------ |
-| `model.mjs`                                          | Shared outpost, region, and multilingual OCR model                       |
-| `pipeline-template.jsonc`                            | `assets/resource/pipeline/SellProduct/{Region}/{Location}.json`          |
-| `pipeline-adb-template.jsonc`                        | `assets/resource_adb/pipeline/SellProduct/{Region}/{Location}.json`      |
-| `sell-template.jsonc`                                | `assets/resource/pipeline/SellProduct/{Region}/SellProduct{Region}.json` |
-| `loop-template.jsonc`                                | `assets/resource/pipeline/SellProduct/Loop.json`                         |
-| `session-template.jsonc`                             | `assets/resource/pipeline/SellProduct/OperatorSession.json`              |
-| `task-template.jsonc`                                | `assets/tasks/SellProduct.json`                                          |
-| `sync-locales.mjs`                                   | Five-language outpost and operator keys plus missing item keys           |
-| `selection-data.mjs`                                 | `assets/data/SellProduct/selection_data.json`                            |
-| `tools/pipeline-generate/data/settlement_trade.json` | Upstream zmdmap trade data                                               |
+| `model.mjs` | Shared outpost, region, and multilingual OCR model |
+| `pipeline-template.jsonc` | `assets/resource/pipeline/SellProduct/{Region}/{Location}.json` |
+| `pipeline-adb-template.jsonc` | `assets/resource_adb/pipeline/SellProduct/{Region}/{Location}.json` |
+| `sell-template.jsonc` | `assets/resource/pipeline/SellProduct/{Region}/SellProduct{Region}.json` |
+| `loop-template.jsonc` | `assets/resource/pipeline/SellProduct/Loop.json` |
+| `session-template.jsonc` | `assets/resource/pipeline/SellProduct/OperatorSession.json` |
+| `task-template.jsonc` | `assets/tasks/SellProduct.json` |
+| `sync-locales.mjs` | Five-language outpost and operator keys plus missing item keys |
+| `selection-data.mjs` | `assets/data/SellProduct/selection_data.json` |
+| `tools/pipeline-generate/data/settlement_trade.json` | Upstream zmdmap trade data |
 
 These files are maintained manually and are outside generator output:
 

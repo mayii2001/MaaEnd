@@ -226,18 +226,18 @@ SellProductSellLoop                                  （不限次数的售卖循
 
 生成器位于 `tools/pipeline-generate/SellProduct/`。`model.mjs` 根据 zmdmap 数据定义据点 ID、多语言 OCR、任务选项和模板数据；`selection-data.mjs` 生成 Go 使用的部署数据 `assets/data/SellProduct/selection_data.json`。`tools/pipeline-generate/data/` 是生成器的数据源目录。
 
-| 维护入口                                             | 生成产物                                                                 |
+| 维护入口 | 生成产物 |
 | ---------------------------------------------------- | ------------------------------------------------------------------------ |
-| `model.mjs`                                          | 据点、地区、多语言 OCR 的共享模型                                        |
-| `pipeline-template.jsonc`                            | `assets/resource/pipeline/SellProduct/{Region}/{Location}.json`          |
-| `pipeline-adb-template.jsonc`                        | `assets/resource_adb/pipeline/SellProduct/{Region}/{Location}.json`      |
-| `sell-template.jsonc`                                | `assets/resource/pipeline/SellProduct/{Region}/SellProduct{Region}.json` |
-| `loop-template.jsonc`                                | `assets/resource/pipeline/SellProduct/Loop.json`                         |
-| `session-template.jsonc`                             | `assets/resource/pipeline/SellProduct/OperatorSession.json`              |
-| `task-template.jsonc`                                | `assets/tasks/SellProduct.json`                                          |
-| `sync-locales.mjs`                                   | 五语言据点名、干员键和缺失的物品键                                       |
-| `selection-data.mjs`                                 | `assets/data/SellProduct/selection_data.json`                            |
-| `tools/pipeline-generate/data/settlement_trade.json` | zmdmap 上游贸易数据源                                                    |
+| `model.mjs` | 据点、地区、多语言 OCR 的共享模型 |
+| `pipeline-template.jsonc` | `assets/resource/pipeline/SellProduct/{Region}/{Location}.json` |
+| `pipeline-adb-template.jsonc` | `assets/resource_adb/pipeline/SellProduct/{Region}/{Location}.json` |
+| `sell-template.jsonc` | `assets/resource/pipeline/SellProduct/{Region}/SellProduct{Region}.json` |
+| `loop-template.jsonc` | `assets/resource/pipeline/SellProduct/Loop.json` |
+| `session-template.jsonc` | `assets/resource/pipeline/SellProduct/OperatorSession.json` |
+| `task-template.jsonc` | `assets/tasks/SellProduct.json` |
+| `sync-locales.mjs` | 五语言据点名、干员键和缺失的物品键 |
+| `selection-data.mjs` | `assets/data/SellProduct/selection_data.json` |
+| `tools/pipeline-generate/data/settlement_trade.json` | zmdmap 上游贸易数据源 |
 
 以下文件由手工维护，生成器不处理：
 

@@ -62,6 +62,19 @@
             ]
         },
         {
+            "name": "CloudADB",
+            "label": "$controller.CloudADB.label",
+            "description": "$controller.CloudADB.description",
+            "type": "Adb",
+            "attach_resource_path": [
+                "./resource_adb",
+                "./resource_cloud_adb"
+            ],
+            "option": [
+                "ClientVersionCloudLocked"
+            ]
+        },
+        {
             "name": "PlayCover",
             "type": "PlayCover",
             "playcover": {

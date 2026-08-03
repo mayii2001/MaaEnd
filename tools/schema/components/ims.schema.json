@@ -51,28 +51,21 @@
         "ItemQuantitySatisfiedParam": {
             "type": "object",
             "title": "ItemQuantitySatisfied Param",
-            "description": "Parameters for ItemQuantitySatisfied recognition (R1). Hits when cached quantity for item is >= quantity. Does not check readiness; combine with ItemDataReady via And when needed. Missing item counts as 0. UI Focus announce is off by default.",
+            "description": "Parameters for ItemQuantitySatisfied recognition (R1). Evaluates a boolean expression over one or more cached item IDs via {ITEM_ID} placeholders (same operators as ExpressionRecognition). Does not check readiness; combine with ItemDataReady via And when needed. Missing item counts as 0. UI Focus announce is off by default.",
             "additionalProperties": false,
             "required": [
-                "item",
-                "quantity"
+                "expression"
             ],
             "properties": {
-                "item": {
-                    "title": "Item",
-                    "description": "Item ID (same keys as SyncItemData items / IMS.json).",
+                "expression": {
+                    "title": "Expression",
+                    "description": "Boolean expression over cached item quantities. Use {ITEM_ID} placeholders (missing item = 0). Supports + - * / % < <= > >= == != && || ! and parentheses. Result must be boolean.",
                     "type": "string",
                     "minLength": 1
                 },
-                "quantity": {
-                    "title": "Quantity",
-                    "description": "Required minimum cached quantity (inclusive).",
-                    "type": "integer",
-                    "minimum": 0
-                },
                 "notify_ui": {
                     "title": "Notify UI",
-                    "description": "When true, print current vs required quantity to UI Focus (throttled). Default false.",
+                    "description": "When true, print the resolved expression to UI Focus (throttled). Default false.",
                     "type": "boolean",
                     "default": false
                 }

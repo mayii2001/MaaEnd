@@ -9,7 +9,7 @@ IMS（Item Management System）在 go-service 进程内维护培养道具的数�
 | **A2** | `SyncItemData` | 核心：扫当前界面，写入整表缓存 |
 | **A1** | `UpdateItemQuantity` | 对单个物品做加减 |
 | **A3** | `AddItemData` | 扫当前界面，把识别到的数量**累加**进缓存 |
-| **R1** | `ItemQuantitySatisfied` | 判断某物品缓存数量是否达标 |
+| **R1** | `ItemQuantitySatisfied` | 用条件表达式判断缓存数量是否达标 |
 | **R2** | `ItemDataReady` | 判断整份缓存是否可用（有没有、过没过期） |
 
 代号 `A1` / `A2` / `A3`、`R1` / `R2` 只表示实现顺序，不表示优先级。其中 **A2 虽是第二个写的动作，却是整个 IMS 的核心**。
@@ -73,12 +73,15 @@ A2 负责「看一眼当前界面，把物品数量记下来」。业务侧**不
 | `false`（默认） | **重新生成** | 以本轮命中结果为准，**整表重建**缓存。本轮没扫到的 ID 不会出现在新表里。 |
 | `true` | **覆写** | 在已有缓存上，按本轮命中的 ID **覆盖数量**；没扫到的 ID **保留旧值**。 |
 
-覆写适合「列表要翻页」的场景：第一页用重新生成拿到完整第一页；翻页后再用覆写，只更新本页见到的物品，不把上一页已记的数量清掉。
+覆写适合「列表要翻页」的场景。预留入口 `SyncItemData` 的默认链路为：
 
 ```text
-第 1 页：page_dedup = false（重新生成）
-翻页后：page_dedup = true（覆写已见 ID，保留其它）
+初次：SyncItemDataRunFull（page_dedup = false，整表重建）
+  next[0]：[JumpBack]SyncItemDataScrollPage → 滑动后 SyncItemDataRunInc（page_dedup = true）
+  next[1]：SyncItemDataLock（扫描结束）
 ```
+
+额外翻页次数只改 `SyncItemDataScrollPage.max_hit`（当前为 1）。`max_hit` 用尽后 JumpBack 不再命中，走 Lock。该节点在 Win32-Front 默认 `enabled=false`，ADB 资源开启并覆盖为上滑。
 
 ### 同 Resource 只真正扫库一次（实现细节）
 
@@ -132,24 +135,52 @@ A3 与其它动作 / 识别器不同：**不要求 IMS 缓存已经存在**。
 > 培养素材页的 `IMS/item/*` 节点 ROI 往往不适合奖励界面，请传入适配当前画面的识别节点。奖励弹出入场动画期间，调用前应对物品区域使用 `pre_wait_freezes`（协议空间见 `ProtocolSpaceRewardAddItemData`）。
 >
 > 参考 Pipeline：`AddItemDataOnRewards` → `AddItemDataCloseRewards`。
+>
+> 已接入 A3 的关闭奖励路径：`SceneNoticeRewardsConfirm`（日常奖励 / 基建快速收取等）、`CreditShoppingClaimConfirm`、`MFGCabinClaimRewardClose`、`GrowthChamberClaimRewardClose`。
 
 ---
 
 ## R1：`ItemQuantitySatisfied`
 
-判断缓存里某个物品是否够用。
+判断缓存里的物品数量是否满足条件表达式。
+
+与通用识别器 [`ExpressionRecognition`](../custom.md#expressionrecognition) 语法相同，但占位符读取的是 **IMS 缓存物品 ID**，而不是画面 OCR 节点。
 
 | 参数 | 说明 |
 | --- | --- |
-| `item` | 物品 ID |
-| `quantity` | 要求的最小数量（含等号，`>= 0`） |
-| `notify_ui` | 是否向 UI 播报当前库存与目标；默认 `false`（关闭） |
+| `expression` | 布尔表达式；用 `{物品ID}` 引用缓存数量（缺失按 `0`） |
+| `notify_ui` | 是否向 UI 播报展开后的表达式；默认 `false`（关闭） |
 
-返回命中（true）表示：缓存数量 `>= quantity`。缺失的物品按 `0` 计。
+支持的运算：
+
+- 算术：`+` `-` `*` `/` `%`
+- 比较：`<` `<=` `>` `>=` `==` `!=`
+- 逻辑：`&&` `||` `!`
+- 分组：`(...)`
+
+示例：
+
+```json
+{
+    "custom_recognition": "ItemQuantitySatisfied",
+    "custom_recognition_param": {
+        "expression": "({PROTODISK}+{CAST_DIE})>=100",
+        "notify_ui": false
+    }
+}
+```
+
+再例如：
+
+- `{PROTODISK}>=40`
+- `{PROTODISK}+{CAST_DIE}>=100 && {T_CREDS}<50`
+- `!({HEAVY_CAST_DIE}<10)`
+
+表达式结果必须是布尔值。
 
 R1 **不检查**缓存是否就绪。若需要「数据可用且数量够」，用 `And` 同时挂上 R2（`ItemDataReady`）与 R1，避免把「还没同步」误判成「数量不够去刷」。
 
-仅当 `notify_ui` 为 `true` 时，才会向 UI Focus 输出当前库存与目标（约 10 秒内相同文案会节流）。调度类 `next` 扫描建议保持默认关闭，避免刷屏。
+仅当 `notify_ui` 为 `true` 时，才会向 UI Focus 输出展开后的表达式（约 10 秒内相同文案会节流）。调度类 `next` 扫描建议保持默认关闭，避免刷屏。
 
 ---
 
@@ -226,7 +257,7 @@ A2 落盘时会写下 `updated_at`。R2 用「现在 − 同步时间」是否�
 | `SyncItemData.json` | A2 入口与同 Resource 锁定 |
 | `UpdateItemQuantity.json` | A1 |
 | `AddItemData.json` | A3 最佳实践（领奖后关闭） |
-| `ItemQuantitySatisfied.json` | R1（调用方覆盖 `item` / `quantity`） |
+| `ItemQuantitySatisfied.json` | R1（调用方覆盖 `expression`） |
 | `ItemDataReady.json` | R2 + `EnsureItemDataReady*` |
 | `common.json` / `item/*.json` | 品质色与各物品识别节点 |
 

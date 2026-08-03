@@ -982,5 +982,6 @@
     "resource/image/IMS/item/ADVANCED_COMBAT_RECORD_TEMPLATE": "f0d901e6b24ff1aca00e497aa463de59360674f835fd1fe693864081bb0c6d0a",
     "resource/image/IMS/item/TACHYON_SCREENING_LATTICE_TEMPLATE": "36a7ec226ccadb3e7bf63a79d9ae8d583544a3b036bf76b702d2d91f4636d1fd",
     "resource/image/IMS/item/PROTOHEDRON_TEMPLATE": "23e61c6003a5576e1309c77941b5691df11bcbc8b2b029c4269145b6362f48f9",
-    "resource/image/Common/Button/TrackedMissionMapButton": "476da5205d64343ce84275dbb8978269172bbb27ca93ad47461424850674705b"
+    "resource/image/Common/Button/TrackedMissionMapButton": "476da5205d64343ce84275dbb8978269172bbb27ca93ad47461424850674705b",
+    "resource/image/IMS/item/OROBERYL_TEMPLATE": "3602a08527a0542a7c7e2b6451e9ba17937d0b2fd6a1d4aad584b1b80f7b4e57"
 }

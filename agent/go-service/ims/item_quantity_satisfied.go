@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MaaXYZ/MaaEnd/agent/go-service/pkg/boolexpr"
 	"github.com/MaaXYZ/MaaEnd/agent/go-service/pkg/i18n"
 	"github.com/MaaXYZ/MaaEnd/agent/go-service/pkg/maafocus"
 	maa "github.com/MaaXYZ/maa-framework-go/v4"
@@ -23,14 +24,15 @@ var _ maa.CustomRecognitionRunner = &ItemQuantitySatisfied{}
 
 // itemQuantitySatisfiedParam is custom_recognition_param for ItemQuantitySatisfied.
 type itemQuantitySatisfiedParam struct {
-	Item     string `json:"item"`
-	Quantity int    `json:"quantity"`
-	// NotifyUI when true prints current vs required quantity to UI Focus.
+	// Expression is a boolean expression over cached item quantities.
+	// Placeholders use {ITEM_ID}, same arithmetic/compare/logic as ExpressionRecognition.
+	Expression string `json:"expression"`
+	// NotifyUI when true prints the resolved expression to UI Focus.
 	// Default false (omit or false) to avoid flooding dispatch-style next scans.
 	NotifyUI bool `json:"notify_ui"`
 }
 
-// ItemQuantitySatisfied reports whether cached item quantity is >= required (R1).
+// ItemQuantitySatisfied reports whether cached item quantities meet an expression (R1).
 // Read-only; does not check readiness — combine with ItemDataReady via And when needed.
 type ItemQuantitySatisfied struct{}
 
@@ -61,36 +63,72 @@ func (r *ItemQuantitySatisfied) Run(ctx *maa.Context, arg *maa.CustomRecognition
 		return nil, false
 	}
 
-	current := globalCache.quantity(params.Item)
+	resolvedExpression, values, err := boolexpr.ResolvePlaceholders(
+		params.Expression,
+		func(itemID string) (int, error) {
+			return globalCache.quantity(itemID), nil
+		},
+	)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("component", componentItemQuantitySatisfied).
+			Str("expression", params.Expression).
+			Msg("failed to resolve expression values")
+		return nil, false
+	}
+
+	result, err := boolexpr.Evaluate(resolvedExpression)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("component", componentItemQuantitySatisfied).
+			Str("expression", params.Expression).
+			Str("resolved_expression", resolvedExpression).
+			Msg("failed to evaluate expression")
+		return nil, false
+	}
+
+	matched, ok := result.(bool)
+	if !ok {
+		log.Error().
+			Str("component", componentItemQuantitySatisfied).
+			Str("expression", params.Expression).
+			Str("resolved_expression", resolvedExpression).
+			Interface("result", result).
+			Msg("expression result must be boolean")
+		return nil, false
+	}
+
 	if params.NotifyUI {
-		displayName := itemDisplayName(params.Item)
-		focusKey := "ims.quantity_ok"
-		if current < params.Quantity {
-			focusKey = "ims.quantity_short"
+		focusKey := "ims.expression_ok"
+		if !matched {
+			focusKey = "ims.expression_short"
 		}
 		maafocus.PrintThrottle(
 			ctx,
 			itemQuantityFocusThrottle,
-			i18n.T(focusKey, displayName, current, params.Quantity),
+			i18n.T(focusKey, resolvedExpression),
 		)
 	}
 
-	if current < params.Quantity {
-		log.Info().
-			Str("component", componentItemQuantitySatisfied).
-			Str("reason", "insufficient").
-			Str("item", params.Item).
-			Int("current", current).
-			Int("required", params.Quantity).
-			Msg("item quantity not satisfied")
+	log.Info().
+		Str("component", componentItemQuantitySatisfied).
+		Str("expression", params.Expression).
+		Str("resolved_expression", resolvedExpression).
+		Interface("values", values).
+		Bool("matched", matched).
+		Msg("item expression evaluated")
+
+	if !matched {
 		return nil, false
 	}
 
 	detailJSON, err := json.Marshal(map[string]any{
-		"satisfied": true,
-		"item":      params.Item,
-		"current":   current,
-		"required":  params.Quantity,
+		"satisfied":           true,
+		"expression":          params.Expression,
+		"resolved_expression": resolvedExpression,
+		"values":              values,
 	})
 	if err != nil {
 		log.Error().
@@ -113,12 +151,10 @@ func parseItemQuantitySatisfiedParam(raw string) (itemQuantitySatisfiedParam, er
 	if err := json.Unmarshal([]byte(raw), &params); err != nil {
 		return itemQuantitySatisfiedParam{}, err
 	}
-	params.Item = strings.TrimSpace(params.Item)
-	if params.Item == "" {
-		return itemQuantitySatisfiedParam{}, fmt.Errorf("item is required")
-	}
-	if params.Quantity < 0 {
-		return itemQuantitySatisfiedParam{}, fmt.Errorf("quantity must be >= 0, got %d", params.Quantity)
+
+	params.Expression = strings.TrimSpace(params.Expression)
+	if params.Expression == "" {
+		return itemQuantitySatisfiedParam{}, fmt.Errorf("expression is required")
 	}
 	return params, nil
 }

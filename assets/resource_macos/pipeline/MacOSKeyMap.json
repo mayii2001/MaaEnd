@@ -98,6 +98,22 @@
             }
         }
     },
+    "GiftOperatorMoveResetBackward": {
+        "action": {
+            "type": "ClickKey",
+            "param": {
+                "key": 1
+            }
+        }
+    },
+    "GiftOperatorMoveResetForward": {
+        "action": {
+            "type": "ClickKey",
+            "param": {
+                "key": 13
+            }
+        }
+    },
     "GiftOperatorShiftToRunMapTracker": {
         "action": {
             "type": "ClickKey",

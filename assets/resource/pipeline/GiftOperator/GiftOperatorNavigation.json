@@ -93,7 +93,12 @@
             }
         },
         "post_delay": 0,
-        "rate_limit": 0
+        "rate_limit": 0,
+        "focus": {
+            "Node.PipelineNode.Succeeded": {
+                "trace": true
+            }
+        }
     },
     "GiftOperatorMoveLocation1Move": {
         "desc": "移动尝试接触到干员(预设位置1)",
@@ -123,6 +128,11 @@
                 121
             ],
             "timeout": 2000
+        },
+        "focus": {
+            "Node.PipelineNode.Succeeded": {
+                "trace": true
+            }
         }
     },
     "GiftOperatorMoveLocation2": {
@@ -145,7 +155,12 @@
             }
         },
         "post_delay": 0,
-        "rate_limit": 0
+        "rate_limit": 0,
+        "focus": {
+            "Node.PipelineNode.Succeeded": {
+                "trace": true
+            }
+        }
     },
     "GiftOperatorMoveLocation2Move": {
         "desc": "移动尝试接触到干员(预设位置2)",
@@ -175,6 +190,11 @@
                 121
             ],
             "timeout": 2000
+        },
+        "focus": {
+            "Node.PipelineNode.Succeeded": {
+                "trace": true
+            }
         }
     },
     "GiftOperatorMoveLocation3": {
@@ -197,7 +217,12 @@
             }
         },
         "post_delay": 0,
-        "rate_limit": 0
+        "rate_limit": 0,
+        "focus": {
+            "Node.PipelineNode.Succeeded": {
+                "trace": true
+            }
+        }
     },
     "GiftOperatorMoveLocation3Move": {
         "desc": "移动尝试接触到干员(预设位置3)",
@@ -227,6 +252,11 @@
                 121
             ],
             "timeout": 2000
+        },
+        "focus": {
+            "Node.PipelineNode.Succeeded": {
+                "trace": true
+            }
         }
     },
     "GiftOperatorMoveMapTracker": {
@@ -257,7 +287,12 @@
         "next": [
             "GiftOperatorClickContact",
             "[JumpBack]GiftOperatorGoAheadContact"
-        ]
+        ],
+        "focus": {
+            "Node.PipelineNode.Succeeded": {
+                "trace": true
+            }
+        }
     },
     "GiftOperatorGoAheadContact": {
         "desc": "继续向前走尝试接触联络台",
@@ -278,6 +313,11 @@
                         }
                     ]
                 }
+            }
+        },
+        "focus": {
+            "Node.PipelineNode.Succeeded": {
+                "trace": true
             }
         }
     },
@@ -300,7 +340,12 @@
         },
         "next": [
             "GiftOperatorClickContact"
-        ]
+        ],
+        "focus": {
+            "Node.PipelineNode.Succeeded": {
+                "trace": true
+            }
+        }
     },
     "GiftOperatorShiftToRunMapTracker": {
         "desc": "按 Shift 恢复跑步模式，等待后再用 MapTracker 寻路",

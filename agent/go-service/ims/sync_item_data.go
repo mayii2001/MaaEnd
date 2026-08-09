@@ -23,10 +23,18 @@ var _ maa.CustomActionRunner = &SyncItemData{}
 //
 // items: 字典，键为物品 ID，值为 And 识别节点名；依次执行节点，沿 box_index 链取 OCR 数量。
 // A2 必须显式传入 items（含定点 OCR 如 T_CREDS_NUMBER / OROBERYL_NUMBER），不使用 items.json 默认清单。
-// page_dedup: 翻页去重。false=本轮结果整表创建；true=在已有缓存上按 ID 覆盖数量。
+// page_dedup: 翻页去重 / 地区重建。
+//
+//	false=仅重建本轮 items 内的 ID（未命中则从缓存删除这些 ID），其他地区已缓存 ID 保留；
+//	true=在已有缓存上按命中 ID 覆盖数量，未命中保留旧值。
+//
+// notify_ui:
+//   - omitted → default true（命中物品时 Focus 播报「物品名：数量」）
+//   - false → 不播报物品命中（万能跳转顺手缓存等场景）
 type syncItemDataParam struct {
 	Items     map[string]string `json:"items"`
 	PageDedup bool              `json:"page_dedup"`
+	NotifyUI  *bool             `json:"notify_ui"`
 }
 
 // SyncItemData scans configured item recognizers on the current screen and persists quantities.
@@ -57,6 +65,7 @@ func (a *SyncItemData) Run(ctx *maa.Context, arg *maa.CustomActionArg) bool {
 		return false
 	}
 	items := params.Items
+	notifyUI := resolveSyncNotifyUI(params.NotifyUI)
 
 	if err := ensureHydrated(); err != nil {
 		log.Error().
@@ -82,7 +91,13 @@ func (a *SyncItemData) Run(ctx *maa.Context, arg *maa.CustomActionArg) bool {
 		return false
 	}
 
-	merged, err := baseItemsForSync(params.PageDedup)
+	itemIDs := make([]string, 0, len(items))
+	for itemID := range items {
+		itemIDs = append(itemIDs, itemID)
+	}
+	sort.Strings(itemIDs)
+
+	merged, err := baseItemsForSync(params.PageDedup, itemIDs)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -91,25 +106,9 @@ func (a *SyncItemData) Run(ctx *maa.Context, arg *maa.CustomActionArg) bool {
 		return false
 	}
 
-	itemIDs := make([]string, 0, len(items))
-	for itemID := range items {
-		itemIDs = append(itemIDs, itemID)
-	}
-	sort.Strings(itemIDs)
-
 	hitCount := 0
 	for _, itemID := range itemIDs {
-		nodeName := strings.TrimSpace(items[itemID])
-		itemID = strings.TrimSpace(itemID)
-		if itemID == "" || nodeName == "" {
-			log.Error().
-				Str("component", componentSyncItemData).
-				Str("item_id", itemID).
-				Str("node", nodeName).
-				Msg("items contains empty item id or node name")
-			return false
-		}
-
+		nodeName := items[itemID]
 		qty, ok, err := recognizeItemQuantity(ctx, nodeName, img)
 		if err != nil {
 			log.Error().
@@ -134,7 +133,9 @@ func (a *SyncItemData) Run(ctx *maa.Context, arg *maa.CustomActionArg) bool {
 		merged[itemID] = qty
 		hitCount++
 		displayName := itemDisplayName(itemID)
-		maafocus.Print(ctx, i18n.T("ims.sync_item_found", displayName, qty))
+		if notifyUI {
+			maafocus.Print(ctx, i18n.T("ims.sync_item_found", displayName, qty))
+		}
 		log.Info().
 			Str("component", componentSyncItemData).
 			Str("item_id", itemID).
@@ -144,6 +145,7 @@ func (a *SyncItemData) Run(ctx *maa.Context, arg *maa.CustomActionArg) bool {
 			Int("previous", prev).
 			Bool("overwrote", existed).
 			Bool("page_dedup", params.PageDedup).
+			Bool("notify_ui", notifyUI).
 			Msg("item quantity recorded")
 	}
 
@@ -175,15 +177,59 @@ func parseSyncItemDataParam(raw string) (syncItemDataParam, error) {
 	if err := json.Unmarshal([]byte(raw), &params); err != nil {
 		return syncItemDataParam{}, err
 	}
+	normalized, err := normalizeItemsMap(params.Items)
+	if err != nil {
+		return syncItemDataParam{}, err
+	}
+	params.Items = normalized
 	return params, nil
 }
 
-func baseItemsForSync(pageDedup bool) (map[string]int, error) {
-	if !pageDedup {
-		return map[string]int{}, nil
+// normalizeItemsMap trims item IDs and node names so cache keys stay consistent
+// across region rebuild, recognition, and persistence.
+func normalizeItemsMap(items map[string]string) (map[string]string, error) {
+	if len(items) == 0 {
+		return items, nil
 	}
+	out := make(map[string]string, len(items))
+	for id, node := range items {
+		id = strings.TrimSpace(id)
+		node = strings.TrimSpace(node)
+		if id == "" || node == "" {
+			return nil, fmt.Errorf("items contains empty item id or node name")
+		}
+		if _, dup := out[id]; dup {
+			return nil, fmt.Errorf("items contains duplicate item id after trim: %s", id)
+		}
+		out[id] = node
+	}
+	return out, nil
+}
+
+// resolveSyncNotifyUI defaults to true when omitted (announce each hit item).
+func resolveSyncNotifyUI(v *bool) bool {
+	if v == nil {
+		return true
+	}
+	return *v
+}
+
+func baseItemsForSync(pageDedup bool, scanItemIDs []string) (map[string]int, error) {
 	// Caller must ensureHydrated first; memory is the session source of truth.
-	return ItemsSnapshot(), nil
+	// scanItemIDs must already be normalized (see normalizeItemsMap).
+	snap := ItemsSnapshot()
+	if pageDedup {
+		return snap, nil
+	}
+	// Region rebuild: drop only IDs belonging to this scan, keep other regions.
+	out := make(map[string]int, len(snap))
+	for id, qty := range snap {
+		out[id] = qty
+	}
+	for _, id := range scanItemIDs {
+		delete(out, id)
+	}
+	return out, nil
 }
 
 func recognizeItemQuantity(ctx *maa.Context, andNode string, img image.Image) (qty int, hit bool, err error) {

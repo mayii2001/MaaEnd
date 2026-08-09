@@ -1,13 +1,13 @@
 {
-    "WULING_ARTIFICING_CATALYST": {
-        "desc": "武陵精锻助剂",
+    "CHARTERED_HH_PERMIT": {
+        "desc": "特许寻访凭证",
         "recognition": {
             "type": "And",
             "param": {
                 "all_of": [
-                    "IMSItemColorYellow",
-                    "__WULING_ARTIFICING_CATALYST_TEMPLATE",
-                    "WULING_ARTIFICING_CATALYST_COUNT"
+                    "IMSItemColorTimedCorner",
+                    "__CHARTERED_HH_PERMIT_TEMPLATE",
+                    "CHARTERED_HH_PERMIT_COUNT"
                 ],
                 "box_index": 2
             }
@@ -16,12 +16,12 @@
         "post_delay": 0,
         "rate_limit": 0
     },
-    "__WULING_ARTIFICING_CATALYST_TEMPLATE": {
-        "desc": "IMS:武陵精锻助剂模版匹配(roi 基于品质色)",
+    "__CHARTERED_HH_PERMIT_TEMPLATE": {
+        "desc": "IMS:特许寻访凭证模版匹配(roi 基于限时角标色)",
         "recognition": {
             "type": "TemplateMatch",
             "param": {
-                "roi": "IMSItemColorYellow",
+                "roi": "IMSItemColorTimedCorner",
                 "roi_offset": [
                     -30,
                     -100,
@@ -29,10 +29,9 @@
                     100
                 ],
                 "template": [
-                    "IMS/item/WULING_ARTIFICING_CATALYST_TEMPLATE.png"
+                    "IMS/item/CHARTERED_HH_PERMIT_TEMPLATE.png"
                 ],
                 "green_mask": true,
-                "threshold": 0.85, //分数过低可能会和高级认知载体混淆
                 "order_by": "Score"
             }
         },
@@ -40,14 +39,14 @@
         "post_delay": 0,
         "rate_limit": 0
     },
-    "WULING_ARTIFICING_CATALYST_COUNT": {
-        "desc": "IMS:武陵精锻助剂数量(灰色文字 And OCR；box_index 指向 OCR)",
+    "CHARTERED_HH_PERMIT_COUNT": {
+        "desc": "IMS:特许寻访凭证数量(灰色文字 And OCR；box_index 指向 OCR)",
         "recognition": {
             "type": "And",
             "param": {
                 "all_of": [
-                    "__WULING_ARTIFICING_CATALYST_COUNT_TEXT_COLOR",
-                    "WULING_ARTIFICING_CATALYST_COUNT_OCR"
+                    "__CHARTERED_HH_PERMIT_COUNT_TEXT_COLOR",
+                    "CHARTERED_HH_PERMIT_COUNT_OCR"
                 ],
                 "box_index": 1
             }
@@ -56,12 +55,12 @@
         "post_delay": 0,
         "rate_limit": 0
     },
-    "__WULING_ARTIFICING_CATALYST_COUNT_TEXT_COLOR": {
-        "desc": "IMS:武陵精锻助剂数量灰色文字(roi 基于模板)",
+    "__CHARTERED_HH_PERMIT_COUNT_TEXT_COLOR": {
+        "desc": "IMS:特许寻访凭证数量灰色文字(roi 基于模板)",
         "recognition": {
             "type": "ColorMatch",
             "param": {
-                "roi": "__WULING_ARTIFICING_CATALYST_TEMPLATE",
+                "roi": "__CHARTERED_HH_PERMIT_TEMPLATE",
                 "roi_offset": [
                     0,
                     78,
@@ -85,12 +84,12 @@
         "post_delay": 0,
         "rate_limit": 0
     },
-    "WULING_ARTIFICING_CATALYST_COUNT_OCR": {
-        "desc": "IMS:武陵精锻助剂数量 OCR（纯数字）",
+    "CHARTERED_HH_PERMIT_COUNT_OCR": {
+        "desc": "IMS:特许寻访凭证数量 OCR（纯数字）",
         "recognition": {
             "type": "OCR",
             "param": {
-                "roi": "__WULING_ARTIFICING_CATALYST_COUNT_TEXT_COLOR",
+                "roi": "__CHARTERED_HH_PERMIT_COUNT_TEXT_COLOR",
                 "roi_offset": [
                     -6,
                     -2,

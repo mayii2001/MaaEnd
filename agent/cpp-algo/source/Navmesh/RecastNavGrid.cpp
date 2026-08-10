@@ -496,6 +496,58 @@ std::vector<uint8_t> WallsAtLayer(
     return keep;
 }
 
+WallSegments ClipWallsAtLayerInterpolated(
+    const std::vector<WorldPoint>& p0,
+    const std::vector<WorldPoint>& p1,
+    const std::vector<double>& h0,
+    const std::vector<double>& h1,
+    const Grid<float>& lh,
+    double ox,
+    double oy)
+{
+    WallSegments out;
+    const auto lerp = [](const WorldPoint& a, const WorldPoint& b, double t) {
+        return WorldPoint { a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t };
+    };
+    for (size_t i = 0; i < p0.size(); ++i) {
+        const double length = std::hypot(p1[i].x - p0[i].x, p1[i].y - p0[i].y);
+        const int64_t steps = sampleSteps(length, 0.4);
+        bool open = false;
+        double open_t = 0.0;
+        // 同一条三角边可能沿途穿过上下叠层。按局部层高切段，不能因其中一点
+        // 命中上层就把整条边投影到下层。
+        for (int64_t k = 0; k < steps - 1; ++k) {
+            const double t0 = static_cast<double>(k) / static_cast<double>(steps - 1);
+            const double t1 = static_cast<double>(k + 1) / static_cast<double>(steps - 1);
+            const double t = (t0 + t1) / 2.0;
+            const double sx = p0[i].x + (p1[i].x - p0[i].x) * t;
+            const double sy = p0[i].y + (p1[i].y - p0[i].y) * t;
+            const int64_t gx = static_cast<int64_t>(std::floor((sx - ox) / kCS));
+            const int64_t gy = static_cast<int64_t>(std::floor((sy - oy) / kCS));
+            bool keep = false;
+            if (gx >= 0 && gx < lh.nx && gy >= 0 && gy < lh.ny) {
+                const float layer_height = lh.at(gy, gx);
+                const double edge_height = h0[i] + (h1[i] - h0[i]) * t;
+                keep = !std::isnan(layer_height) && std::abs(static_cast<double>(layer_height) - edge_height) <= kQH;
+            }
+            if (keep && !open) {
+                open = true;
+                open_t = t0;
+            }
+            if (!keep && open) {
+                out.p0.push_back(lerp(p0[i], p1[i], open_t));
+                out.p1.push_back(lerp(p0[i], p1[i], t0));
+                open = false;
+            }
+        }
+        if (open) {
+            out.p0.push_back(lerp(p0[i], p1[i], open_t));
+            out.p1.push_back(p1[i]);
+        }
+    }
+    return out;
+}
+
 WallCsr BuildWallIndex(const std::vector<WorldPoint>& p0, const std::vector<WorldPoint>& p1, double ox, double oy, int64_t nx, int64_t ny)
 {
     WallCsr csr;

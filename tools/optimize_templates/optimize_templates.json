@@ -1694,5 +1694,6 @@
     "resource/image/IconRecognition/5/item_domain_tundra_coupon": "8aa176b6eb822698fe4c4389577b11fe0331323087ee395c59a4e725fed03009",
     "resource/image/IconRecognition/5/item_domain_jinlong_coupon": "45505406f94d9383deca78bceca4ad13dc6c3f075bf509a2eef171d19ac554c2",
     "resource/image/IconRecognition/5/item_cbp_exp": "340a24b8c421a8d5f4efdeef3330ffad129d9ea5af8815652a3569e8f2c94f1e",
-    "resource/image/IconRecognition/5/item_adventureexp": "e8f9f87434f674cf5302dbafee30e136608ea5e1215471fe7e1285d76a00d022"
+    "resource/image/IconRecognition/5/item_adventureexp": "e8f9f87434f674cf5302dbafee30e136608ea5e1215471fe7e1285d76a00d022",
+    "resource/image/IMS/item/ARSENAL_TICKET_TEMPLATE": "9f9cdb5663790a08bb215a9e3b18f12668347ae48b8e1e096aba6dc954ed6dc5"
 }

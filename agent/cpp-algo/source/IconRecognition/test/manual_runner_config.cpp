@@ -256,9 +256,9 @@ const std::string& RequireValue(const std::vector<std::string>& arguments, std::
 std::string ManualRunnerUsage()
 {
     return R"(Usage:
-  icon-recognition-manual-runner --all [--side full|left|right|split|all] [--jobs <N|auto>] [--debug] [--expected <path>]
-  icon-recognition-manual-runner --grid-type <type> [--image <basename>] [--side full|left|right|split|all] [--jobs <N|auto>] [--debug] [--expected <path>]
-  icon-recognition-manual-runner --image <basename> [--jobs <N|auto>] [--debug] [--expected <path>]
+  icon-recognition-manual-runner --all [--dataset win32|adb] [--side full|left|right|split|all] [--jobs <N|auto>] [--debug] [--expected <path>] [--rois <path>]
+  icon-recognition-manual-runner --grid-type <type> [--image <basename>] [--dataset win32|adb] [--side full|left|right|split|all] [--jobs <N|auto>] [--debug] [--expected <path>] [--rois <path>]
+  icon-recognition-manual-runner --image <basename> [--dataset win32|adb] [--jobs <N|auto>] [--debug] [--expected <path>] [--rois <path>]
   icon-recognition-manual-runner -h|--help|-?
 
 Grid types:
@@ -266,6 +266,7 @@ Grid types:
 
 Side modes apply only to transfer and port_storager. The default is full.
 Worker selection defaults to 1. auto uses physical cores and is capped at 16.
+Without --rois, the selected dataset uses its bundled ROI file. An unspecified dataset defaults to win32.
 )";
 }
 
@@ -280,7 +281,9 @@ ManualRunnerOptions ParseManualRunnerOptions(const std::vector<std::string>& arg
     bool side_specified = false;
     bool jobs_specified = false;
     bool debug_specified = false;
+    bool dataset_specified = false;
     bool expected_specified = false;
+    bool rois_specified = false;
     for (std::size_t index = 0; index < arguments.size(); ++index) {
         const std::string& argument = arguments[index];
         if (IsHelpOption(argument)) {
@@ -347,12 +350,37 @@ ManualRunnerOptions ParseManualRunnerOptions(const std::vector<std::string>& arg
             debug_specified = true;
             continue;
         }
+        if (argument == "--dataset") {
+            if (dataset_specified) {
+                throw std::invalid_argument("duplicate option: --dataset");
+            }
+            const std::string& value = RequireValue(arguments, index);
+            if (value == "win32") {
+                options.dataset = TestDataset::Win32;
+            }
+            else if (value == "adb") {
+                options.dataset = TestDataset::Adb;
+            }
+            else {
+                throw std::invalid_argument("unknown dataset: " + value);
+            }
+            dataset_specified = true;
+            continue;
+        }
         if (argument == "--expected") {
             if (expected_specified) {
                 throw std::invalid_argument("duplicate option: --expected");
             }
             options.expected_path = RequireValue(arguments, index);
             expected_specified = true;
+            continue;
+        }
+        if (argument == "--rois") {
+            if (rois_specified) {
+                throw std::invalid_argument("duplicate option: --rois");
+            }
+            options.rois_path = RequireValue(arguments, index);
+            rois_specified = true;
             continue;
         }
         throw std::invalid_argument("unknown option: " + argument);
@@ -374,6 +402,17 @@ ManualRunnerOptions ParseManualRunnerOptions(const std::vector<std::string>& arg
         throw std::invalid_argument("--side requires --grid-type transfer or port_storager");
     }
     return options;
+}
+
+std::filesystem::path ResolveManualRunnerRoisPath(
+    const ManualRunnerOptions& options,
+    const std::filesystem::path& win32_default,
+    const std::filesystem::path& adb_default)
+{
+    if (!options.rois_path.empty()) {
+        return options.rois_path;
+    }
+    return options.dataset == TestDataset::Adb ? adb_default : win32_default;
 }
 
 std::size_t ResolveManualRunnerJobs(const ManualRunnerOptions& options, std::size_t physical_core_count, std::size_t case_count)

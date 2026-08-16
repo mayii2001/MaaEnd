@@ -78,6 +78,7 @@
                                     "valuables",
                                     "shipment",
                                     "credit_trade",
+                                    "rewards",
                                     "single_roi"
                                 ],
                                 "title": "Grid Type",
@@ -109,7 +110,7 @@
                                 "maximum": 1,
                                 "default": 0.85,
                                 "title": "Threshold",
-                                "description": "Minimum final match score. Lower values increase recall and false-positive risk."
+                                "description": "General minimum final match score enforced uniformly for every grid type."
                             },
                             "subpixel_threshold": {
                                 "type": "number",

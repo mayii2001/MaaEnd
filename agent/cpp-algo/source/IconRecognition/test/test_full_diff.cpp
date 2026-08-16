@@ -337,14 +337,17 @@ void WriteDetail(const std::filesystem::path& path, const iconrecognition::Recog
 
 std::string RunLabel(const iconrecognition::test::ManualRunnerOptions& options)
 {
+    const std::string dataset = options.dataset == iconrecognition::test::TestDataset::Win32 ? "win32-"
+                                : options.dataset == iconrecognition::test::TestDataset::Adb ? "adb-"
+                                                                                             : "";
     if (options.all_images) {
-        return "all";
+        return dataset + "all";
     }
     if (options.grid_type) {
-        return std::string(iconrecognition::GridTypeName(*options.grid_type));
+        return dataset + std::string(iconrecognition::GridTypeName(*options.grid_type));
     }
     if (options.image_name) {
-        return std::filesystem::path(*options.image_name).stem().string();
+        return dataset + std::filesystem::path(*options.image_name).stem().string();
     }
     return "manual";
 }
@@ -431,7 +434,11 @@ int main(int argc, char** argv)
         }
 
         const std::filesystem::path input_root = ICON_RECOGNITION_TEST_INPUT_DIR;
-        const auto cases = iconrecognition::test::DiscoverManualRunnerCases(input_root, ICON_RECOGNITION_TEST_ROIS_PATH, options);
+        const std::filesystem::path rois_path = iconrecognition::test::ResolveManualRunnerRoisPath(
+            options,
+            ICON_RECOGNITION_TEST_WIN32_ROIS_PATH,
+            ICON_RECOGNITION_TEST_ADB_ROIS_PATH);
+        const auto cases = iconrecognition::test::DiscoverManualRunnerCases(input_root, rois_path, options);
         std::optional<iconrecognition::test::ExpectedResults> expected_results;
         if (!options.expected_path.empty()) {
             expected_results.emplace(iconrecognition::test::LoadExpectedResults(options.expected_path));
@@ -586,6 +593,9 @@ int main(int argc, char** argv)
             { "cases_per_second", elapsed > 0.0 ? reports.size() / elapsed : 0.0 },
             { "cases", std::move(reports) },
         };
+        report_object["dataset"] = options.dataset == iconrecognition::test::TestDataset::Win32 ? "win32"
+                                   : options.dataset == iconrecognition::test::TestDataset::Adb ? "adb"
+                                                                                                : "unspecified";
         if (!options.expected_path.empty()) {
             report_object["expected"] = options.expected_path.string();
         }

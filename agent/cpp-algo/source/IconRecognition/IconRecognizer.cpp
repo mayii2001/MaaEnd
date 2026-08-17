@@ -515,6 +515,10 @@ public:
             ValidateRecognitionRoi(image, request.roi);
             return recognize_original(image, request);
         }
+        catch (const std::invalid_argument& error) {
+            LogError << "IconRecognizer recognition rejected invalid input" << VAR(error.what());
+            return Error(request.roi, request.grid_type, "invalid_argument", error.what());
+        }
         catch (const std::exception& error) {
             LogError << "IconRecognizer recognition failed" << VAR(error.what());
             return Error(request.roi, request.grid_type, "exception", error.what());
@@ -561,6 +565,11 @@ public:
                 if (performance) {
                     performance->grid_detection_ms += ElapsedMilliseconds(detection_started);
                 }
+                if (detection.cells.empty()) {
+                    const std::string message =
+                        detection.failure_message.empty() ? "Grid detection found no formal cells" : detection.failure_message;
+                    return Error(request.roi, request.grid_type, "grid_detection_failed", message);
+                }
                 cells = detection.cells;
                 detected_grids = detection.grids;
                 grid_scale = detection.grid_scale;
@@ -601,7 +610,7 @@ public:
                     rarity.rarity,
                     request.threshold,
                     request.subpixel_threshold,
-                    single_roi ? 0 : std::max(1, cvRound(kGridSearchRadius * grid_scale)),
+                    std::max(1, cvRound(kGridSearchRadius * grid_scale)),
                     performance_ptr);
                 const auto texture_started = performance ? PerformanceClock::now() : PerformanceClock::time_point {};
                 const auto foreground_texture =
@@ -741,6 +750,10 @@ public:
                 LogInfo << "IconRecognition debug performance" << VAR(*result.diagnostics->performance);
             }
             return result;
+        }
+        catch (const std::invalid_argument& error) {
+            LogError << "IconRecognizer recognition rejected invalid input" << VAR(error.what());
+            return Error(request.roi, request.grid_type, "invalid_argument", error.what());
         }
         catch (const std::exception& error) {
             LogError << "IconRecognizer recognition failed" << VAR(error.what());

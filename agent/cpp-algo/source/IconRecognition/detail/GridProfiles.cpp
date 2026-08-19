@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <map>
 #include <optional>
@@ -129,7 +130,7 @@ constexpr GridProfile kCreditTradeGridProfile {
     .min_columns = 7,
     .min_rows = 1,
 };
-// 奖励界面按 96px cell、约 117px 横向 pitch 标定；每行独立居中，不共享列起点。
+// 奖励界面按 96px cell、约 117px 横向 pitch 标定；布局整体居中，换行后共享首行左边界。
 constexpr GridProfile kRewardsGridProfile {
     .cell_size = 96,
     .pitch_x = 117.0,
@@ -512,6 +513,29 @@ std::vector<cv::Rect> PartitionPortStoragerRegions(cv::Size crop_size)
         cv::Rect(0, 0, left_width, crop_size.height),
         cv::Rect(right_start, 0, crop_size.width - right_start, crop_size.height),
     };
+}
+
+std::optional<double> GridScaleForControllerType(std::string_view controller_type)
+{
+    const auto equals_ignore_case = [controller_type](std::string_view candidate) {
+        return controller_type.size() == candidate.size() && std::ranges::equal(controller_type, candidate, [](char left, char right) {
+                   return std::tolower(static_cast<unsigned char>(left)) == std::tolower(static_cast<unsigned char>(right));
+               });
+    };
+    const auto matches_any = [&](const auto& candidates) {
+        return std::ranges::any_of(candidates, equals_ignore_case);
+    };
+    // Linux/WlRoots 与 MacOS 暂按标准桌面 profile 处理；这些别名尚无独立截图数据验证。
+    constexpr std::array<std::string_view, 4> kStandardControllerTypes { "Win32", "Linux", "WlRoots", "MacOS" };
+    // CloudADB 的 MaaController type 是 Adb，因此放大 profile 会自然覆盖 CloudADB；PlayCover 暂沿用该 profile。
+    constexpr std::array<std::string_view, 2> kAdbControllerTypes { "Adb", "PlayCover" };
+    if (matches_any(kAdbControllerTypes)) {
+        return kAdbControllerGridScale;
+    }
+    if (matches_any(kStandardControllerTypes)) {
+        return kWin32ControllerGridScale;
+    }
+    return std::nullopt;
 }
 
 GridProfile ProfileFor(GridType type)

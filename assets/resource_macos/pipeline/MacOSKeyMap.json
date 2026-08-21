@@ -178,6 +178,14 @@
             }
         }
     },
+    "MapNavigatorZiplineMount": {
+        "action": {
+            "type": "ClickKey",
+            "param": {
+                "key": 3
+            }
+        }
+    },
     "MapTrackerOpenWorld_GetOffZipline": {
         "action": {
             "type": "ClickKey",
@@ -231,14 +239,6 @@
             "type": "ClickKey",
             "param": {
                 "key": 53
-            }
-        }
-    },
-    "VisitFriendsEnterShipSuccess": {
-        "action": {
-            "type": "ClickKey",
-            "param": {
-                "key": 16
             }
         }
     },

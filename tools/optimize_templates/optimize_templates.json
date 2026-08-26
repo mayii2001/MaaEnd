@@ -511,7 +511,6 @@
     "resource/image/EssenceFilter/LockButton": "b45b2806ab095df48cddcdaf4ceba41683a80b9be0f581b70665717d2e78bdb9",
     "resource/image/EssenceFilter/DiscardButton": "e4e303827d4068b6b01ad73bef9abef41b8b0068d15586daf670f9e14c3b655c",
     "resource/image/EssenceFilter/EssenceGeneral": "b0e1dc8e0c270eac546accc885bf2aa0e2706765ee8c83083ff125cb96ee6240",
-    "resource/image/EssenceFilter/EssenceSlot": "e158492fae033dd40f745e4ec8f151a487e74b7204e08ce56e0cdb8ed8096b40",
     "resource/image/MapTracker/map/map02_lv003": "35dfd12c05552a5704d530092d43a7ec63675029dc7aaeba26595ec9e3901a0b",
     "resource/image/MapTracker/BigMapZoomOut": "1a895419d93c782c6ae56124b460bf6ccd40948c3156c7722b1b7d5790f5ee3b",
     "resource/image/MapTracker/BigMapZoomIn": "be8184878ba4b345abae591bbcee78273d6ea7f954eed285065b1aa5f8ded050",
@@ -1713,5 +1712,10 @@
     "resource/image/IntelArchive/ItemIcon": "a8f6a5297a3f05ab6381f0126ba0303d7739bd69b7dc6686bb03c2321b67932d",
     "resource/image/IntelArchive/IncidentInvestigation1Collecting": "03bb35ff3c0f94216209e53a80444462c611edaaa8f5e23100698e2e7f65741b",
     "resource/image/IntelArchive/DetailSwitchRight": "c3654753cd0018c184d79b6462c8e0d23f6cb2623aaff1ae31466750c40b9fab",
-    "resource/image/IntelArchive/DetailSwitchLeft": "e9f7891f55ca779988cf46ad281fbfb96518dd938c4b5baa1c3483fa9e57ebd0"
+    "resource/image/IntelArchive/DetailSwitchLeft": "e9f7891f55ca779988cf46ad281fbfb96518dd938c4b5baa1c3483fa9e57ebd0",
+    "resource/image/SceneManager/MapTeleportCoreHub": "df4c3d61a6d98c462485e70a83477956acb071a8687da2234fde67dbf8608b96",
+    "resource/image/SceneManager/MapTeleportCoreSettlement": "28acc85ac69096687201abfb595a673cb7e96e8b2b6396a2412633b821b4addd",
+    "resource/image/SceneManager/MapMarkerPanelDelete": "71c039237bd2baa8b67b3c2081b0f2e0f4829245b53d8b359e7c451d9f80a192",
+    "resource/image/SceneManager/MapTeleportAnchor": "43a7ed95e897ad7546f8df365462d51adb3ff73b24c510a09048b8db386d4e1a",
+    "resource/image/AutoDelivery/RecycleBin": "c78b07db88543a3c4a053fe9cd3150800116551bb86d617c4dc35b86549debff"
 }

@@ -50,10 +50,7 @@
                 "EssenceFilterCheckItemLevelAction",
                 "EssenceFilterFinishAction",
                 "EssenceFilterInitAction",
-                "EssenceFilterRowCollectAction",
-                "EssenceFilterRowNextItemAction",
                 "EssenceFilterSkillDecisionAction",
-                "EssenceFilterSwipeCalibrateAction",
 				"FailureCollectorFinish",
 				"FailureCollectorRunTask",
 				"FailureCollectorReset",
@@ -76,7 +73,6 @@
                 "MapTrackerMoveCompatible",
                 "MapTrackerToward",
                 "MapTrackerZipline",
-                "OCREssenceInventoryNumberAction",
                 "PipelineOverride",
                 "PipelineOverrideAction",
                 "PostStop",
@@ -108,18 +104,13 @@
 		{
 			"if": {
 				"properties": {
-					"custom_action": {
-						"enum": [
-							"AutoDeliveryResolveDepotAction",
-							"AutoDeliveryResolveDestinationAction"
-						]
-					}
+					"custom_action": { "const": "AutoDeliveryResolveDestinationAction" }
 				},
 				"required": [ "custom_action" ]
 			},
 			"then": {
 				"properties": {
-					"custom_action_param": { "$ref": "./components/auto_delivery.schema.json#/$defs/ResolveNavigationParam" }
+					"custom_action_param": { "$ref": "./components/auto_delivery.schema.json#/$defs/ResolveDestinationParam" }
 				}
 			}
 		},

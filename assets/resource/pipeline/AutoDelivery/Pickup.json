@@ -47,14 +47,10 @@
     },
     "AutoDeliveryInDestinationMap": {
         "desc": "确认已打开任务目标地图",
-        "recognition": "TemplateMatch",
-        "roi": [
-            900,
-            10,
-            130,
-            140
+        "recognition": "And",
+        "all_of": [
+            "AutoDeliveryTaskDestinationMap"
         ],
-        "template": "AutoDelivery/TrackTaskSuccess.png",
         "pre_delay": 0,
         "post_delay": 0,
         "rate_limit": 0,
@@ -242,15 +238,38 @@
             "Node.Action.Failed": {
                 "trace": true
             }
+        },
+        "attach": {
+            "zip": false
         }
     },
     "AutoDeliveryFetchGoods": {
-        "desc": "识别并接取货物；按钮未出现时允许执行一次仓储私有重试路线",
+        "desc": "识别并接取货物；按钮未出现时先环绕搜索，再允许执行一次仓储私有重试路线",
         "pre_delay": 0,
         "post_delay": 0,
         "rate_limit": 0,
         "next": [
             "AutoDeliveryFetchGoodsButtonWaitFreezes",
+            "AutoDeliverySearchFetchGoodsButton"
+        ]
+    },
+    "AutoDeliverySearchFetchGoodsButton": {
+        "desc": "仓储节点到达后未找到接取货物按钮时，环绕微调站位并持续查找按钮",
+        "recognition": "DirectHit",
+        "pre_delay": 0,
+        "action": "Custom",
+        "custom_action": "CharacterSearchAction",
+        "custom_action_param": {
+            "wait_nodes": [
+                "AutoDeliveryFetchGoodsButtonWaitFreezes"
+            ]
+        },
+        "post_delay": 0,
+        "rate_limit": 0,
+        "next": [
+            "AutoDeliveryFetchGoodsButtonWaitFreezes"
+        ],
+        "on_error": [
             "AutoDeliveryRetryNavigateDepot"
         ]
     },
@@ -324,6 +343,15 @@
         "pre_delay": 0,
         "action": "Custom",
         "custom_action": "FalseAction",
+        "post_wait_freezes": {
+            "time": 300,
+            "target": [
+                763,
+                349,
+                195,
+                270
+            ]
+        },
         "post_delay": 0,
         "rate_limit": 0,
         "next": [

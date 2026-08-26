@@ -25,6 +25,7 @@
 #include "prompt_scan_profile.h"
 #include "roi_template_scanner.h"
 #include "route_tracker.h"
+#include "semantic_helpers.h"
 #include "semantic_nodes.h"
 #include "sensitivity_observer.h"
 #include "steering_controller.h"
@@ -459,11 +460,16 @@ bool NavigationStateMachine::Bootstrap()
     runtime_state_.BeginNavigation(std::chrono::steady_clock::now());
     sensitivity::BeginRun();
 
-    if (session_->HasSatisfiedFinalSuccess(*position_, "bootstrap_already_at_final_goal")) {
-        return true;
+    // 线路可以关掉起步 A*：两条取锚点的路子最后都要 PlanNavmeshRoute，跳过就等于不规划起步，
+    // 落到下面两档现成兜底。这里不做任何判断，纯看线路声明——自动判"网格不对劲"只会误伤。
+    std::optional<DynamicAnchor> anchor;
+    if (param_.enable_bootstrap_navmesh) {
+        anchor = ResolveBootstrapAnchor(param_, session_, *position_);
     }
-
-    const std::optional<DynamicAnchor> anchor = ResolveBootstrapAnchor(param_, session_, *position_);
+    else {
+        LogInfo << "Bootstrap navmesh planning disabled by route param." << VAR(position_->x) << VAR(position_->y)
+                << VAR(position_->zone_id);
+    }
     if (anchor && TryApplyDynamicOverlayToAnchor("bootstrap_navmesh_overlay", anchor->first, anchor->second, false)) {
         SelectPhaseForCurrentWaypoint("bootstrap_navmesh_overlay");
         return true;
@@ -876,8 +882,7 @@ bool NavigationStateMachine::TryReplanRemainingAuthoredRoute(const char* reason)
     // 的所有捷径。弃索次数太多说明这一带的标定或定位整体不可靠, 才整段退回纯走路。
     if (runtime_state_.zipline_abandon_count >= kZiplineAbandonWalkFallbackCount) {
         replan_param.zipline_enabled = false;
-        LogWarn << "Authored route replan disables ziplines: too many abandons this run."
-                << VAR(runtime_state_.zipline_abandon_count);
+        LogWarn << "Authored route replan disables ziplines: too many abandons this run." << VAR(runtime_state_.zipline_abandon_count);
     }
     else {
         replan_param.banned_zipline_hops = runtime_state_.zipline_hop_bans;
@@ -1335,6 +1340,18 @@ bool NavigationStateMachine::TickNavigate()
                      << VAR(route.projection_anchor);
         }
         else {
+            // 严判点的判定圈只当纠正触发: 进圈后按残差转向目标接着走回去, 全程不松前进键。滑索和传送门
+            // 有各自的站位与提交距离, 判定圈被放宽或收紧的那几种情况要的也正是原来的宽松判定, 都不介入。
+            if (waypoint.SettlesAtArrival()) {
+                if (route.waypoint_distance <= route.arrival_band) {
+                    semantic_nodes::SettleAtStrictGoal(semantic_ctx, waypoint);
+                    // 收尾里的转镜头没走操舵那条路, 在途转角账认不出来, 清掉重新起算
+                    runtime_state_.steering_rate.Reset();
+                }
+                // 走路买的是接近段和收尾的精度, 到点就还回去: 跳跃、冲刺这些动作照旧在慢跑态下执行
+                walk_mode_.Request(false);
+            }
+
             const semantic_nodes::Result arrival_semantic_result =
                 semantic_nodes::HandleArrivalSemantic(semantic_ctx, waypoint, route.waypoint_distance);
             if (arrival_semantic_result.request_failure) {
@@ -2041,16 +2058,29 @@ void NavigationStateMachine::UpdatePromptSprintSuppression()
     motion_controller_->SetSprintSuppressed(approaching_prompt);
 }
 
-// Walk mode's only decision point: engaged on the last few units of an approach to a prompt-driven point,
-// released everywhere else (travel legs, recovery, turn-in-place nodes, before motion is confirmed).
+// Walk mode's only decision point: engaged on the last few units of an approach to a point that has to be
+// stood on, released everywhere else (travel legs, recovery, turn-in-place nodes, before motion is confirmed).
 void NavigationStateMachine::UpdateWalkMode(NaviPhase phase)
 {
-    const double nearest_sq = NearestPromptDistanceSq();
+    double nearest_sq = NearestPromptDistanceSq();
     const bool recovering = runtime_state_.recovery.active || runtime_state_.cross_tier_escape.active;
-    const ActionType action = session_->HasCurrentWaypoint() ? session_->CurrentWaypoint().action : ActionType::HEADING;
+    const bool has_waypoint = session_->HasCurrentWaypoint();
+    const ActionType action = has_waypoint ? session_->CurrentWaypoint().action : ActionType::HEADING;
     const bool plain_approach = action == ActionType::COLLECT || action == ActionType::INTERACT || action == ActionType::RUN
                                 || action == ActionType::NAVMESH || action == ActionType::ZIPLINE;
-    if (phase != NaviPhase::Navigate || nearest_sq < 0.0 || recovering || !plain_approach
+    // 末端要纠正的点按同一套来: 走路让滑行距离减半, 到点后要走回去的那段也就短一半
+    bool settling_approach = false;
+    if (has_waypoint && session_->CurrentWaypoint().SettlesAtArrival()) {
+        const Waypoint& goal = session_->CurrentWaypoint();
+        const double dx = goal.x - position_->x;
+        const double dy = goal.y - position_->y;
+        const double distance_sq = dx * dx + dy * dy;
+        if (nearest_sq < 0.0 || distance_sq < nearest_sq) {
+            nearest_sq = distance_sq;
+        }
+        settling_approach = true;
+    }
+    if (phase != NaviPhase::Navigate || nearest_sq < 0.0 || recovering || !(plain_approach || settling_approach)
         || !runtime_state_.route.startup_motion_confirmed) {
         walk_mode_.Request(false);
         return;
@@ -2061,8 +2091,8 @@ void NavigationStateMachine::UpdateWalkMode(NaviPhase phase)
     walk_mode_.Request(nearest_sq <= band * band);
     const bool walking = walk_mode_.engaged();
     if (walking != was_engaged) {
-        const double nearest_prompt_point = std::sqrt(nearest_sq);
-        LogInfo << "Walk mode boundary crossed." << VAR(walking) << VAR(nearest_prompt_point) << VAR(position_->x) << VAR(position_->y);
+        const double nearest_stop_point = std::sqrt(nearest_sq);
+        LogInfo << "Walk mode boundary crossed." << VAR(walking) << VAR(nearest_stop_point) << VAR(position_->x) << VAR(position_->y);
     }
 }
 

@@ -20,10 +20,10 @@
 #include <MaaUtils/NoWarningCV.hpp>
 #include <meojson/json.hpp>
 
-#include "Common/JsoncFile.h"
 #include "../IconRecognizer.h"
 #include "../detail/RecognitionDiagnostics.h"
 #include "../detail/TemplateCatalog.h"
+#include "Common/JsoncFile.h"
 #include "expected_results.h"
 #include "manual_runner_config.h"
 #include "manual_runner_executor.h"

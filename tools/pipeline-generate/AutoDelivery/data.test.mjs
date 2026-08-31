@@ -369,15 +369,15 @@ test("AutoDelivery 任务目标地图识别由公共节点复用", () => {
             "utf8",
         ),
     );
-    const recognitionNode = "AutoDeliveryTaskDestinationMap";
+    const recognitionNode = "AutoDeliveryInTaskDestinationMap";
 
     assert.deepEqual(commonPipeline[recognitionNode], {
         desc: "识别已打开的送货任务目标地图",
         recognition: "TemplateMatch",
         roi: [
-            900,
+            860,
             10,
-            130,
+            170,
             140,
         ],
         template: "AutoDelivery/TrackTaskSuccess.png",
@@ -402,6 +402,64 @@ test("AutoDelivery 任务目标地图识别由公共节点复用", () => {
         areaPipeline,
     ]).match(/AutoDelivery\/TrackTaskSuccess\.png/g);
     assert.equal(templateOccurrences?.length, 1);
+});
+
+test("AutoDelivery 纯识别节点统一使用 Check 或 In 命名", () => {
+    const pipeline = Object.assign(
+        {},
+        ...[
+            "Common.json",
+            "Pickup.json",
+            "Delivery.json",
+        ].map((file) =>
+            parseJsonc(
+                readFileSync(
+                    new URL(`../../../assets/resource/pipeline/AutoDelivery/${file}`, import.meta.url),
+                    "utf8",
+                ),
+            ),
+        ),
+    );
+    const invalidNames = Object.entries(pipeline)
+        .filter(
+            ([
+                name,
+                node,
+            ]) =>
+                name !== "AutoDelivery" &&
+                node.recognition &&
+                node.recognition !== "DirectHit" &&
+                !node.action &&
+                !/^AutoDelivery(?:Check|In)/.test(name),
+        )
+        .map(([name]) => name);
+
+    assert.deepEqual(invalidNames, []);
+});
+
+test("AutoDelivery 省略默认 DirectHit 识别和 DoNothing 动作", () => {
+    const routeDirectory = new URL("../../../assets/resource/pipeline/AutoDelivery/Routes/", import.meta.url);
+    const pipelineFiles = [
+        new URL("./routes-template.json", import.meta.url),
+        new URL("../../../assets/resource/pipeline/AutoDelivery/Common.json", import.meta.url),
+        new URL("../../../assets/resource/pipeline/AutoDelivery/Pickup.json", import.meta.url),
+        new URL("../../../assets/resource/pipeline/AutoDelivery/Delivery.json", import.meta.url),
+        new URL("../../../assets/resource/pipeline/AutoDelivery/RecycleBinAreas.json", import.meta.url),
+        new URL("../../../assets/resource/pipeline/AutoDelivery/RecycleBinCandidates.json", import.meta.url),
+        ...readdirSync(routeDirectory)
+            .filter((file) => file.endsWith(".json"))
+            .map((file) => new URL(file, routeDirectory)),
+    ];
+
+    for (const file of pipelineFiles) {
+        for (const [
+            name,
+            node,
+        ] of Object.entries(readJsonc(file))) {
+            assert.notEqual(node.recognition, "DirectHit", `${name} 不应显式设置默认 DirectHit 识别`);
+            assert.notEqual(node.action, "DoNothing", `${name} 不应显式设置默认 DoNothing 动作`);
+        }
+    }
 });
 
 test("AutoDelivery 仅合并同一地图同一区域的多个资源回收站", () => {

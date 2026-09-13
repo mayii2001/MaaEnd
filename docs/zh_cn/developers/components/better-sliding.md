@@ -53,14 +53,15 @@
 
 #### 可在 `attach` 中传入的参数
 
-以下 5 个字段推荐通过调用节点的 `attach` 传入，`attach` 优先级高于 `custom_action_param` 中的同名字段。
+以下 6 个字段推荐通过调用节点的 `attach` 传入，`attach` 优先级高于 `custom_action_param` 中的同名字段。
 
 | 字段 | 类型 | 必填 | 说明 |
 | ------------------------- | --------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TargetQuantity` | `int`（正整数） | 是 | 目标数量。最终希望滑到的档位值，必须大于 0。 |
 | `TargetQuantityType` | `string` | 否 | 如何解释 `TargetQuantity`。`"Value"`（默认）：绝对离散计数；`"Percentage"`：`availableQuantity` 的百分比（1–100），四舍五入后钳制到 `[1, availableQuantity]`。 |
 | `ReverseTarget` | `bool` | 否 | 为 `true` 时从可用总量反向计算目标：Value 模式为 `availableQuantity - TargetQuantity`；Percentage 模式按剩余百分比计算。默认 `false`。 |
-| `FinishAfterPreciseClick` | `bool` | 否 | 为 `true` 时精确点击后直接返回成功，不再进入数量校验与微调流程。默认 `false`。 |
+| `FineTuneQuantity` | `bool` 或 `int` | 否 | 精确点击后是否继续用 Increase/Decrease 微调。`true`（默认）：始终微调；`false`：一律不微调；整数 `N`（须 `>= 1`）：仅当 `abs(当前数量 − 目标数量) <= N` 时微调。 |
+| `FineTuneFallback` | `string` | 否 | 仅在本次判定为「不微调」时生效，控制此时的行为。`"none"`（默认）：不做补偿，直接收尾；`"more"` / `"less"`：朝增大/减小数量的方向补偿并复查，详见[不微调语义](#不微调语义)。 |
 | `ResetBeforeFindStart` | `bool` | 否 | 为 `true` 时，在匹配滑条起始位置前先向最小方向滑动复位，保证后续记录到的起始位置为最小值。默认 `false`。 |
 
 > [!note]
@@ -75,7 +76,7 @@
 
 #### 仅能通过 `custom_action_param` 传入的参数
 
-除上述 5 个字段外，其余参数都只能从 `custom_action_param` 读取：
+除上述 6 个字段外，其余参数都只能从 `custom_action_param` 读取：
 
 | 字段 | 类型 | 必填 | 说明 |
 | ------------------------------- | ----------------------- | ---- | ------------------------------------------------------------------------------------------------------------------- |
@@ -97,6 +98,16 @@
 > [!note]
 > `SwipeButton`、`IncreaseButton`、`DecreaseButton` 使用模板路径匹配时，Custom 内部固定开启绿色掩码（`green_mask: true`），无需也无法通过参数关闭。请按默认模板的涂绿方式处理模板图片（不参与匹配的部分涂绿 RGB: (0, 255, 0)）。
 
+### 不微调语义
+
+`FineTuneFallback` 只在**本次判定为不微调**时生效：`FineTuneQuantity` 为 `false` 时始终不微调；为整数阈值 `N` 时，仅当当前数量与目标数量的差值不大于 `N` 才微调，否则不微调。此时 BetterSliding 不再逐步逼近目标，而是按 `FineTuneFallback` 决定如何收尾：
+
+| 取值 | 行为 |
+| --- | --- |
+| `"none"`（默认） | 不做任何补偿，本次调整到此结束。 |
+| `"more"` | 当前数量小于目标数量时，朝**增大数量**的方向补偿并复查；当前数量不小于目标数量时不做补偿，直接结束。 |
+| `"less"` | 当前数量大于目标数量时，朝**减小数量**的方向补偿并复查；当前数量不大于目标数量时不做补偿，直接结束。 |
+
 ### 结果节点契约
 
 `OutOfRangeOverrideEnable` 与 `TargetReachableOverrideEnable` 用于把本次 BetterSliding 的判定传回调用方。两个参数必须引用不同节点，且结果节点建议默认设置 `enabled: false`。
@@ -110,7 +121,7 @@
 `sliderMaxQuantity == 0` 只表示当前没有可选的正数目标，BetterSliding 不推断余额不足、库存不足或控件不可用等业务原因。调用方如需区分具体状态，应在 Pipeline 中识别对应界面。
 
 > [!important]
-> `TargetReachableOverrideEnable` 只表示调用方的下一步操作可以达到目标，不表示该操作已经成功。例如售卖、购买等流程仍须在外层 Pipeline 确认交易成功后，才能记录业务目标已完成。
+> `TargetReachableOverrideEnable` 只表示**解析后的目标可达**，与最终调整结果无关：该判定在读取目标数量与滑条上限时即已确定，之后无论微调、偏移复查是否命中目标，都不会改变它。它只表示调用方的下一步操作可以达到目标，不表示该操作已经成功。例如售卖、购买等流程仍须在外层 Pipeline 确认交易成功后，才能记录业务目标已完成。
 
 ### 示例
 

@@ -53,14 +53,15 @@ Suitable for scenarios where you want to slide to the maximum/minimum. Parameter
 
 #### Parameters that can be passed in `attach`
 
-The following 5 fields are recommended to be passed via the calling node's `attach`. The `attach` priority is higher than the same-named fields in `custom_action_param`.
+The following 6 fields are recommended to be passed via the calling node's `attach`. The `attach` priority is higher than the same-named fields in `custom_action_param`.
 
 | Field | Type | Required | Description |
 | ------------------------- | ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TargetQuantity` | `int` (positive integer) | Yes | Target quantity. The desired final slider value, which must be greater than 0. |
 | `TargetQuantityType` | `string` | No | How to interpret `TargetQuantity`. `"Value"` (default): absolute count; `"Percentage"`: percentage of `availableQuantity` (1–100), rounded and clamped. |
 | `ReverseTarget` | `bool` | No | When `true`, resolves the target from the available quantity: Value mode uses `availableQuantity - TargetQuantity`; Percentage mode uses the remaining percentage. Default `false`. |
-| `FinishAfterPreciseClick` | `bool` | No | When `true`, returns success immediately after a precise click, without entering the quantity validation and fine-tuning process. Default `false`. |
+| `FineTuneQuantity` | `bool` or `int` | No | Whether to keep fine-tuning via Increase/Decrease after the precise click. `true` (default): always fine-tune; `false`: never fine-tune; integer `N` (must be `>= 1`): fine-tune only when `abs(current - target) <= N`. |
+| `FineTuneFallback` | `string` | No | Takes effect only when this run decides not to fine-tune. `"none"` (default): no compensation, finish directly; `"more"` / `"less"`: compensate toward increasing/decreasing the quantity and re-check. See [No-Fine-Tune Semantics](#no-fine-tune-semantics). |
 | `ResetBeforeFindStart` | `bool` | No | When `true`, first swipes toward the minimum before matching the slider start position, so the recorded start position is the minimum value. Default `false`. |
 
 > [!note]
@@ -75,7 +76,7 @@ The following 5 fields are recommended to be passed via the calling node's `atta
 
 #### Parameters that can only be passed via `custom_action_param`
 
-In addition to the 5 fields above, all other parameters can only be read from `custom_action_param`:
+In addition to the 6 fields above, all other parameters can only be read from `custom_action_param`:
 
 | Field | Type | Required | Description |
 | ------------------------------- | ----------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -97,6 +98,16 @@ In addition to the 5 fields above, all other parameters can only be read from `c
 > [!note]
 > When matching `SwipeButton`, `IncreaseButton`, or `DecreaseButton` via a template path, the CustomAction always enables the green mask (`green_mask: true`); this cannot be turned off via any parameter. Please prepare your template images following the default template's green masking method (paint non-matching regions green, RGB: (0, 255, 0)).
 
+### No-Fine-Tune Semantics
+
+`FineTuneFallback` only takes effect when **this run decides not to fine-tune**: with `FineTuneQuantity: false` it is always "no fine-tune"; with an integer threshold `N`, fine-tuning is used only when the difference between the current quantity and the target quantity is not greater than `N`, otherwise the run is "no fine-tune". In that case BetterSliding no longer approaches the target step by step; instead `FineTuneFallback` decides how to finish:
+
+| Value | Behavior |
+| --- | --- |
+| `"none"` (default) | No compensation at all; this adjustment ends here. |
+| `"more"` | When the current quantity is less than the target quantity, compensates toward **increasing** the quantity and re-checks; when the current quantity is not less than the target quantity, no compensation and it finishes directly. |
+| `"less"` | When the current quantity is greater than the target quantity, compensates toward **decreasing** the quantity and re-checks; when the current quantity is not greater than the target quantity, no compensation and it finishes directly. |
+
 ### Outcome Node Contract
 
 `OutOfRangeOverrideEnable` and `TargetReachableOverrideEnable` report the current BetterSliding outcome to the caller. They must reference different nodes, and each outcome node should default to `enabled: false`.
@@ -110,7 +121,7 @@ In addition to the 5 fields above, all other parameters can only be read from `c
 `sliderMaxQuantity == 0` only means that no positive target is currently selectable. BetterSliding does not infer business causes such as insufficient balance, insufficient stock, or a disabled control. Callers that need to distinguish those states should recognize the corresponding UI in Pipeline.
 
 > [!important]
-> `TargetReachableOverrideEnable` only means that the caller's next operation can reach the target; it does not mean that operation has succeeded. Selling, purchasing, and similar flows must still confirm the outer transaction in Pipeline before recording the business target as completed.
+> `TargetReachableOverrideEnable` only means that the **resolved target is reachable**; it is unrelated to the final adjustment result. The decision is made when the target quantity and slider maximum are read, and is not changed afterwards regardless of whether fine-tuning or nudging actually hits the target. It only means that the caller's next operation can reach the target; it does not mean that operation has succeeded. Selling, purchasing, and similar flows must still confirm the outer transaction in Pipeline before recording the business target as completed.
 
 ### Example
 

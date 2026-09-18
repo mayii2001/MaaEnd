@@ -1284,6 +1284,7 @@
         "custom_action": "OutpostTradingReserveSession",
         "custom_action_param": {
             "operation": "apply",
+            "location": "CardiacRemediationStation",
             "sliding_node": "OutpostTradingCardiacRemediationStationBetterSliding"
         },
         "post_delay": 0,

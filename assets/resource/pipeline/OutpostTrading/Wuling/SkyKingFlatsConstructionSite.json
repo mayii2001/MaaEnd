@@ -1294,6 +1294,7 @@
         "custom_action": "OutpostTradingReserveSession",
         "custom_action_param": {
             "operation": "apply",
+            "location": "SkyKingFlatsConstructionSite",
             "sliding_node": "OutpostTradingSkyKingFlatsConstructionSiteBetterSliding"
         },
         "post_delay": 0,

@@ -43,7 +43,10 @@
                         "VisitFriendsMenuScanRemarkFallback": {
                             "enabled": true
                         }
-                    }
+                    },
+                    "option": [
+                        "VisitFriendsPriorityRemarkEnable"
+                    ]
                 },
                 {
                     "name": "No",
@@ -56,6 +59,90 @@
                         },
                         "VisitFriendsMenuScanRemarkFallback": {
                             "enabled": false
+                        }
+                    }
+                }
+            ]
+        },
+        "VisitFriendsPriorityRemarkEnable": {
+            "type": "switch",
+            "label": "$option.VisitFriendsPriorityRemarkEnable.label",
+            "default_case": "No",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "pipeline_override": {
+                        "VisitFriendsMenuScanTargetFriendOpenPriorityRemark": {
+                            "enabled": true
+                        },
+                        "VisitFriendsMenuScanTargetFriendOpenRemark": {
+                            "enabled": false
+                        },
+                        "VisitFriendsMenuScanTargetFriendOpen": {
+                            "enabled": false
+                        }
+                    },
+                    "option": [
+                        "VisitFriendsPriorityRemark",
+                        "VisitFriendsPriorityRemarkFallbackToRemark"
+                    ]
+                },
+                {
+                    "name": "No",
+                    "pipeline_override": {
+                        "VisitFriendsMenuScanTargetFriendOpenPriorityRemark": {
+                            "enabled": false
+                        }
+                    }
+                }
+            ]
+        },
+        "VisitFriendsPriorityRemark": {
+            "type": "input",
+            "label": "$option.VisitFriendsPriorityRemark.label",
+            "inputs": [
+                {
+                    "name": "PriorityRemarkName",
+                    "label": "$option.VisitFriendsPriorityRemark.inputs.PriorityRemarkName.label",
+                    "pipeline_type": "string",
+                    "default": ""
+                }
+            ],
+            "pipeline_override": {
+                "VisitFriendsMenuScanSelectPriorityRemarkConsumable": {
+                    "custom_recognition_param": {
+                        "candidate": "VisitFriendsRecognitionItemWithRemark",
+                        "visited_node": "VisitFriendsMenuScanVisited",
+                        "key_regex": "[（(]([^）)]+)",
+                        "whitelist": "{PriorityRemarkName}"
+                    }
+                }
+            }
+        },
+        "VisitFriendsPriorityRemarkFallbackToRemark": {
+            "type": "switch",
+            "label": "$option.VisitFriendsPriorityRemarkFallbackToRemark.label",
+            "default_case": "Yes",
+            "cases": [
+                {
+                    "name": "Yes",
+                    "pipeline_override": {
+                        "VisitFriendsMenuScanPriorityRemarkFallbackToRemark": {
+                            "enabled": true
+                        },
+                        "VisitFriendsMenuScanPriorityRemarkFallbackToNormal": {
+                            "enabled": false
+                        }
+                    }
+                },
+                {
+                    "name": "No",
+                    "pipeline_override": {
+                        "VisitFriendsMenuScanPriorityRemarkFallbackToRemark": {
+                            "enabled": false
+                        },
+                        "VisitFriendsMenuScanPriorityRemarkFallbackToNormal": {
+                            "enabled": true
                         }
                     }
                 }

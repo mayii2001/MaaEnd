@@ -25,8 +25,6 @@ struct AdbTouchTurnProfile
 };
 
 inline constexpr AdbTouchTurnProfile kAdbTouchTurnProfile {};
-constexpr double kAdbTurnScaleMinUnitsPerDegree = 1.0;
-constexpr double kAdbTurnScaleMaxUnitsPerDegree = 4.0;
 constexpr double kWin32TurnScaleMinUnitsPerDegree = 1.0;
 constexpr double kWin32TurnScaleMaxUnitsPerDegree = 50.0;
 
@@ -418,7 +416,7 @@ constexpr int32_t kPipelineRoiBaseHeight = 720;
 // Every interactable raises the same prompt icon, so both kinds share this pre-filter. The threshold is loose on
 // purpose: it only decides whether the subtask is worth running, and the subtask recognizes again before acting.
 // These are the last resort: the shipped scan node below carries the same values, and a route may name its own.
-constexpr const char* kPromptIconRelativePath = "resource/image/RealTimeTask/AutoPick.png";
+constexpr const char* kPromptIconRelativePath = "RealTimeTask/AutoPick.png";
 constexpr double kPromptIconMatchThreshold = 0.75;
 // TemplateMatch node holding the interact pre-filter's roi/template/threshold, so a business whose prompt looks
 // different or sits elsewhere retargets it in JSON. Missing (old resources, new agent) -> the constants above.

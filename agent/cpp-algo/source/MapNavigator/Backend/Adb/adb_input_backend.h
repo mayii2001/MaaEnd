@@ -8,7 +8,6 @@
 #include "../backend.h"
 #include "adb_camera_swipe_driver.h"
 #include "adb_virtual_joystick_driver.h"
-#include "adb_zone_guard.h"
 
 namespace maplocator
 {
@@ -50,11 +49,16 @@ public:
     SteeringTransportProfile steering_transport_profile() const override;
     bool supports_sprint() const override;
 
+    bool supports_walk_toggle() const override { return true; }
+
     void SetMovementStateSync(bool forward, bool left, bool backward, bool right, int delay_millis) override;
     void TriggerJumpSync(int hold_millis) override;
     void TriggerInteractSync(int hold_millis) override;
     void PulseForwardSync(int hold_millis) override;
     void TriggerSprintSync() override;
+
+    void ToggleWalkModeSync() override { joystick_driver_.SetWalking(!joystick_driver_.walking()); }
+
     void ResetForwardWalkSync(int release_millis) override;
     void ClickMouseLeftSync() override;
     void MouseRightDownSync(int delay_millis) override;
@@ -63,9 +67,6 @@ public:
 
 private:
     void ApplyMovementState(int delay_millis);
-    bool CaptureFrame(cv::Mat* out_image) const;
-    bool IsBlindActionAllowed(const char* action_name) const;
-    bool ClickBlindTargetSync(const char* action_name, const AdbTapTarget& target, int hold_millis, int delay_millis);
     bool ClickTargetSync(const AdbTapTarget& target, int hold_millis, int delay_millis);
     bool TouchDownTargetSync(const AdbTapTarget& target) const;
     void MouseRightDownOnTargetSync(const AdbTapTarget& target, int delay_millis);
@@ -79,7 +80,6 @@ private:
     double default_turn_units_per_degree_ = 0.0;
     bool has_locator_ = false;
     AdbCameraSwipeDriver camera_swipe_driver_;
-    AdbZoneGuard zone_guard_;
     AdbVirtualJoystickDriver joystick_driver_;
     AdbActionButtonLayout action_buttons_ {};
     bool forward_down_ = false;

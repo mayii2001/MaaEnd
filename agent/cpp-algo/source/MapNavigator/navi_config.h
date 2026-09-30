@@ -10,6 +10,9 @@ namespace mapnavigator
 constexpr int32_t kWorkWidth = 1280;
 constexpr int32_t kWorkHeight = 720;
 
+// 镜头朝向模式下，常规导航接受读数的经验置信度门槛（含边界）。
+constexpr double kNavigationCameraMinConfidence = 0.3;
+
 // --- ActionWrapper Constants ---
 constexpr double kTurn360UnitsPerWidth = 2.23006;
 constexpr double kTurnDegreesPerCircle = 360.0;
@@ -17,7 +20,9 @@ constexpr double kPitchDegreesPerRange = 180.0;
 
 struct AdbTouchTurnProfile
 {
-    double default_units_per_degree = 5.0;
+    double default_units_per_degree = 3.0;
+    double default_pitch_units_per_degree =
+        default_units_per_degree * kTurnDegreesPerCircle * kWorkHeight / (kWorkWidth * kPitchDegreesPerRange);
     int32_t swipe_duration_ms = 70;
     int32_t post_swipe_settle_ms = 0;
     // 移动指令之后这段时间里的转向会被游戏吞掉: 摇杆状态刚变, 视角拖动还没被受理

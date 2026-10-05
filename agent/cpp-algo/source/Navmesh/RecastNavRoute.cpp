@@ -12,6 +12,7 @@
 #include <cmath>
 #include <limits>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <queue>
 #include <set>
@@ -19,6 +20,12 @@
 
 #include <cstdio>
 #include <cstdlib>
+
+#if defined(__APPLE__)
+#include <malloc/malloc.h>
+#elif defined(_WIN32)
+#include <malloc.h>
+#endif
 
 namespace navmesh::recast
 {
@@ -96,14 +103,68 @@ std::optional<std::pair<WorldPoint, double>> meshPointAt(const ZoneClean& zc, co
     return best;
 }
 
+// 台沿下落判定的缓存, 按全局格记, 一次规划的各档窗口共用。
+struct FallCache
+{
+    struct PointKey
+    {
+        int64_t gx;
+        int64_t gy;
+        float h;
+
+        bool operator==(const PointKey& o) const { return gx == o.gx && gy == o.gy && h == o.h; }
+    };
+
+    struct EdgeKey
+    {
+        PointKey a;
+        PointKey b;
+
+        bool operator==(const EdgeKey& o) const { return a == o.a && b == o.b; }
+    };
+
+    static uint64_t mix(uint64_t x)
+    {
+        x ^= x >> 30;
+        x *= 0xbf58476d1ce4e5b9ULL;
+        x ^= x >> 27;
+        x *= 0x94d049bb133111ebULL;
+        return x ^ (x >> 31);
+    }
+
+    // ±0 相等, 散列前并成 +0
+    static uint64_t hashPoint(const PointKey& k)
+    {
+        const float h = k.h == 0.0F ? 0.0F : k.h;
+        return mix(static_cast<uint64_t>(k.gx) * 0x9E3779B97F4A7C15ULL ^ mix(static_cast<uint64_t>(k.gy)) ^ std::bit_cast<uint32_t>(h));
+    }
+
+    struct PointHash
+    {
+        size_t operator()(const PointKey& k) const { return static_cast<size_t>(hashPoint(k)); }
+    };
+
+    struct EdgeHash
+    {
+        size_t operator()(const EdgeKey& k) const
+        {
+            return static_cast<size_t>(mix(hashPoint(k.a) + 0x9E3779B97F4A7C15ULL * hashPoint(k.b)));
+        }
+    };
+
+    std::unordered_map<PointKey, OccluderPoint, PointHash> points;
+    std::unordered_map<EdgeKey, bool, EdgeHash> memo;
+};
+
 // 窗口里的台沿下落交给碰撞体判。
 std::function<bool(int64_t, int64_t, float, float)> FallGate(
     std::shared_ptr<const OccluderScene> solid,
     const ZoneClean& zc,
     const std::array<float, 4>& tf,
-    double x0,
-    double y0,
-    int64_t nx)
+    int64_t gx0,
+    int64_t gy0,
+    int64_t nx,
+    std::shared_ptr<FallCache> cache)
 {
     const double sx = tf[0];
     const double tx = tf[1];
@@ -112,26 +173,33 @@ std::function<bool(int64_t, int64_t, float, float)> FallGate(
     if (solid == nullptr || sx == 0.0 || sy == 0.0) {
         return {};
     }
-    auto memo = std::make_shared<std::map<std::tuple<int64_t, int64_t, float, float>, bool>>();
-    auto points = std::make_shared<std::map<std::pair<int64_t, float>, OccluderPoint>>();
-    return [solid = std::move(solid), zc = &zc, sx, tx, sy, ty, x0, y0, nx, memo, points](int64_t a, int64_t b, float ha, float hb) {
-        const auto key = std::make_tuple(a, b, ha, hb);
-        if (const auto it = memo->find(key); it != memo->end()) {
+    const double x0 = static_cast<double>(gx0) * kCS;
+    const double y0 = static_cast<double>(gy0) * kCS;
+    return [solid = std::move(solid), zc = &zc, sx, tx, sy, ty, gx0, gy0, x0, y0, nx, cache = std::move(cache)](
+               int64_t a,
+               int64_t b,
+               float ha,
+               float hb) {
+        const FallCache::PointKey ka { gx0 + a % nx, gy0 + a / nx, ha };
+        const FallCache::PointKey kb { gx0 + b % nx, gy0 + b / nx, hb };
+        const FallCache::EdgeKey key { ka, kb };
+        if (const auto it = cache->memo.find(key); it != cache->memo.end()) {
             return it->second;
         }
-        const auto at = [&](int64_t c, float h) {
-            const auto pk = std::make_pair(c, h);
-            if (const auto hit = points->find(pk); hit != points->end()) {
+        const auto at = [&](int64_t c, const FallCache::PointKey& pk) {
+            if (const auto hit = cache->points.find(pk); hit != cache->points.end()) {
                 return hit->second;
             }
             const WorldPoint p { x0 + (static_cast<double>(c % nx) + 0.5) * kCS, y0 + (static_cast<double>(c / nx) + 0.5) * kCS };
-            const auto m = meshPointAt(*zc, p, static_cast<double>(h)).value_or(std::make_pair(p, static_cast<double>(h)));
+            const auto m = meshPointAt(*zc, p, static_cast<double>(pk.h)).value_or(std::make_pair(p, static_cast<double>(pk.h)));
             const OccluderPoint q { .x = (m.first.x - tx) / sx, .y = m.second, .z = (ty - m.first.y) / sy };
-            points->emplace(pk, q);
+            cache->points.emplace(pk, q);
             return q;
         };
-        const bool ok = !solid->dropBlocked(at(a, ha), at(b, hb), kFallClimb, kFallHeight);
-        memo->emplace(key, ok);
+        const OccluderPoint pa = at(a, ka);
+        const OccluderPoint pb = at(b, kb);
+        const bool ok = !solid->dropBlocked(pa, pb, kFallClimb, kFallHeight);
+        cache->memo.emplace(key, ok);
         return ok;
     };
 }
@@ -239,15 +307,16 @@ bool loadGridWindow(
 {
     const std::vector<const GridTileRef*> tiles = GridTilesInRect(gz, wgx0, wgy0, wgx0 + nx - 1, wgy0 + ny - 1);
     // 先按瓦目录里的记录数开够。窗外与非自有矩形的记录会被滤掉, 所以这是个上界。
-    // 解瓦是纯读: 每块领一段瓦, 按同一个上界给它划一段互不相交的写区直写, 收工按块序压紧。
-    // 写区起点与压紧次序都只由瓦下标定, 于是 rec 的次序与线程数无关, 表也始终只有一份。
+    // 解瓦是纯读: 每块瓦按同一个上界划一段互不相交的写区直写, 收工按瓦序压紧。
+    // 写区起点与压紧次序都只由瓦下标定, 于是 rec 的次序与线程数无关, 表也始终只有一份。记录多的瓦先解。
     const bool with_fields = fp != nullptr && fz != nullptr;
     const auto nt = static_cast<int64_t>(tiles.size());
     const size_t nw = NavWorkerCountForBlocks(nt);
-    size_t cap = 0;
-    for (const GridTileRef* t : tiles) {
-        cap += t->records;
+    std::vector<size_t> beg(static_cast<size_t>(nt) + 1, 0);
+    for (int64_t i = 0; i < nt; ++i) {
+        beg[static_cast<size_t>(i) + 1] = beg[static_cast<size_t>(i)] + tiles[static_cast<size_t>(i)]->records;
     }
+    const size_t cap = beg.back();
     out.rec.assign(cap, GridSpanRec {});
     if (with_fields) {
         out.scc.assign(cap, 0);
@@ -255,22 +324,24 @@ bool loadGridWindow(
         out.seg.assign(cap, 0);
         out.tax.assign(cap, 0);
     }
-    std::vector<size_t> beg(nw, 0);
-    std::vector<size_t> cnt(nw, 0);
+    std::vector<int64_t> order(static_cast<size_t>(nt));
+    std::iota(order.begin(), order.end(), int64_t { 0 });
+    std::stable_sort(order.begin(), order.end(), [&](int64_t a, int64_t b) {
+        return tiles[static_cast<size_t>(a)]->records > tiles[static_cast<size_t>(b)]->records;
+    });
+    std::vector<size_t> cnt(static_cast<size_t>(nt), 0);
+    std::atomic<int64_t> next { 0 };
     std::atomic<bool> ok { true };
-    ParallelChunks(nt, nw, [&](size_t w, int64_t lo, int64_t hi) {
-        size_t at = 0;
-        for (int64_t i = 0; i < lo; ++i) {
-            at += tiles[static_cast<size_t>(i)]->records;
-        }
-        beg[w] = at;
+    ParallelChunks(static_cast<int64_t>(nw), nw, [&](size_t, int64_t, int64_t) {
         GridTile tile;
         FieldsTile ft;
-        for (int64_t i = lo; i < hi; ++i) {
+        for (int64_t q = next.fetch_add(1); q < nt && ok.load(); q = next.fetch_add(1)) {
+            const int64_t i = order[static_cast<size_t>(q)];
             const GridTileRef* t = tiles[static_cast<size_t>(i)];
             if (t->records == 0) {
                 continue;
             }
+            size_t at = beg[static_cast<size_t>(i)];
             if (!gp.decodeTile(*t, tile)) {
                 ok.store(false);
                 return;
@@ -318,15 +389,15 @@ bool loadGridWindow(
                 }
                 out.rec[at++] = r;
             }
+            cnt[static_cast<size_t>(i)] = at - beg[static_cast<size_t>(i)];
         }
-        cnt[w] = at - beg[w];
     });
     if (!ok.load()) {
         out.rec.clear();
         return false;
     }
-    size_t kept = cnt[0];
-    for (size_t w = 1; w < nw; ++w) {
+    size_t kept = 0;
+    for (size_t w = 0; w < static_cast<size_t>(nt); ++w) {
         if (cnt[w] != 0 && beg[w] != kept) {
             const auto b = static_cast<int64_t>(beg[w]);
             const auto e = static_cast<int64_t>(beg[w] + cnt[w]);
@@ -427,39 +498,79 @@ int64_t pickDeckRec(const GridWindow& gw, int64_t nx, int64_t ny, int64_t gcx, i
     return best;
 }
 
-// 点到最近核心格的格距 × kCS,与窗口里的 nearestCell() 同口径,只是在全区图上量。
+// 两个点各自到最近核心格的格距 × kCS,与窗口里的 nearestCell() 同口径,只是在全区图上量。
 // 搜索半径取判据的两倍,够不着的点只报这个下界,反正它已经在闸外了。
-double coreAnchorPx(const GridPack& gp, const GridZoneDir& gz, const WorldPoint& p)
+std::array<double, 2> coreAnchorPx(const GridPack& gp, const GridZoneDir& gz, const std::array<WorldPoint, 2>& pts)
 {
     const double cs = gp.cellSize();
     const double reach = kSnapRadius * 2.0;
-    const auto cx = static_cast<int64_t>(std::floor(p.x / cs));
-    const auto cy = static_cast<int64_t>(std::floor(p.y / cs));
     const auto rad = static_cast<int64_t>(std::ceil(reach / cs));
-    int64_t best = -1;
-    GridTile tile;
-    for (const GridTileRef* t : GridTilesInRect(gz, cx - rad, cy - rad, cx + rad, cy + rad)) {
-        if (t->records == 0 || !gp.decodeTile(*t, tile)) {
-            continue;
-        }
-        for (const GridSpanRec& r : tile.rec) {
-            if ((r.flags & kGridFlagCore) == 0) {
+    std::array<int64_t, 2> cx {};
+    std::array<int64_t, 2> cy {};
+    std::vector<const GridTileRef*> tiles;
+    std::vector<uint8_t> owners;
+    for (size_t k = 0; k < 2; ++k) {
+        cx[k] = static_cast<int64_t>(std::floor(pts[k].x / cs));
+        cy[k] = static_cast<int64_t>(std::floor(pts[k].y / cs));
+        for (const GridTileRef* t : GridTilesInRect(gz, cx[k] - rad, cy[k] - rad, cx[k] + rad, cy[k] + rad)) {
+            if (t->records == 0) {
                 continue;
             }
-            const int64_t ix = r.cell % t->nx;
-            const int64_t iy = r.cell / t->nx;
-            if (ix < t->px0 || ix > t->px1 || iy < t->py0 || iy > t->py1) {
-                continue;
+            const auto it = std::find(tiles.begin(), tiles.end(), t);
+            if (it == tiles.end()) {
+                tiles.push_back(t);
+                owners.push_back(static_cast<uint8_t>(1U << k));
             }
-            const int64_t dx = t->gx0 + ix - cx;
-            const int64_t dy = t->gy0 + iy - cy;
-            const int64_t d = dx * dx + dy * dy;
-            if (best < 0 || d < best) {
-                best = d;
+            else {
+                owners[static_cast<size_t>(it - tiles.begin())] |= static_cast<uint8_t>(1U << k);
             }
         }
     }
-    return best < 0 ? reach : std::sqrt(static_cast<double>(best)) * cs;
+    const auto nt = static_cast<int64_t>(tiles.size());
+    std::vector<std::array<int64_t, 2>> best(tiles.size(), { -1, -1 });
+    ParallelChunks(nt, NavWorkerCountForBlocks(nt), [&](size_t, int64_t lo, int64_t hi) {
+        GridTile tile;
+        for (int64_t i = lo; i < hi; ++i) {
+            const GridTileRef* t = tiles[static_cast<size_t>(i)];
+            if (!gp.decodeTile(*t, tile)) {
+                continue;
+            }
+            const uint8_t own = owners[static_cast<size_t>(i)];
+            std::array<int64_t, 2>& b = best[static_cast<size_t>(i)];
+            for (const GridSpanRec& r : tile.rec) {
+                if ((r.flags & kGridFlagCore) == 0) {
+                    continue;
+                }
+                const int64_t ix = r.cell % t->nx;
+                const int64_t iy = r.cell / t->nx;
+                if (ix < t->px0 || ix > t->px1 || iy < t->py0 || iy > t->py1) {
+                    continue;
+                }
+                for (size_t k = 0; k < 2; ++k) {
+                    if ((own & (1U << k)) == 0) {
+                        continue;
+                    }
+                    const int64_t dx = t->gx0 + ix - cx[k];
+                    const int64_t dy = t->gy0 + iy - cy[k];
+                    const int64_t d = dx * dx + dy * dy;
+                    if (b[k] < 0 || d < b[k]) {
+                        b[k] = d;
+                    }
+                }
+            }
+        }
+    });
+    std::array<double, 2> out {};
+    for (size_t k = 0; k < 2; ++k) {
+        int64_t m = -1;
+        for (const std::array<int64_t, 2>& b : best) {
+            if (b[k] >= 0 && (m < 0 || b[k] < m)) {
+                m = b[k];
+            }
+        }
+        out[k] = m < 0 ? reach : std::sqrt(static_cast<double>(m)) * cs;
+    }
+    return out;
 }
 
 // 一块解开的格图连同它的原点与尺寸。原点落在全局格线上, 所以窗口格号与烘焙格号一一对上。
@@ -1184,8 +1295,230 @@ void PushDropLandings(
         const auto [ax, ay] = cell_of(at);
         pts[i] = at;
         hz[i] = h_low;
-        dg.clearance[i] = static_cast<double>(dist.at(ay, ax));
+        // 跨类下落试点时净空图已随搜索释放, 只要落点
+        if (!dist.v.empty()) {
+            dg.clearance[i] = static_cast<double>(dist.at(ay, ax));
+        }
     }
+}
+
+// 跨类台沿下落的一跳: 前段在起点那一类走到台沿, 后段从落点起在下面那一类走。
+struct DropHop
+{
+    WorldPoint take;
+    double take_h = 0.0;
+    WorldPoint land;
+    double land_h = 0.0;
+};
+
+// 每试一处要多规划两段, 纯成本上界
+constexpr size_t kDropHopTries = 3;
+
+// 起点可达域里往别类跳下的每一步: 本类核心面的正交邻格上, 别类有低出一个可攀爬高差以上的面。
+template <typename Fn>
+void ForEachCrossDrop(const WindowInfo& info, Fn&& fn)
+{
+    const SpanTable& st = info.st3;
+    const int64_t nx = info.nx;
+    const int64_t ny = info.ny;
+    for (size_t u = 0; u < info.reach3.size(); ++u) {
+        const int64_t cu = st.sp_cell[u];
+        if (info.reach3[u] == 0 || info.core.v[static_cast<size_t>(cu)] == 0) {
+            continue;
+        }
+        const double hu = static_cast<double>(st.sp_h[u]);
+        for (const auto& [dx, dy] : { std::pair { 1, 0 }, std::pair { -1, 0 }, std::pair { 0, 1 }, std::pair { 0, -1 } }) {
+            const int64_t vx = cu % nx + dx;
+            const int64_t vy = cu / nx + dy;
+            if (vx < 0 || vy < 0 || vx >= nx || vy >= ny) {
+                continue;
+            }
+            const int64_t cv = vy * nx + vx;
+            const int64_t j = st.j(cv);
+            if (j < 0 || info.sev.steps.has(cu, cv)) {
+                continue;
+            }
+            for (int64_t k = st.cstart(j), ke = k + st.ccnt(j); k < ke; ++k) {
+                if (info.vis3[static_cast<size_t>(k)] == 0 && static_cast<double>(st.sp_h[static_cast<size_t>(k)]) < hu - kClimb) {
+                    fn(static_cast<int64_t>(u), cu, cv, dx, dy, k);
+                }
+            }
+        }
+    }
+}
+
+// 窗内 peer 类的可走面逐 span 记它的分量号, 其余记 0。只解跳点落脚格的包围盒。
+std::vector<uint32_t> PeerSpans(
+    const GridPack& gp,
+    const GridZoneDir& gz,
+    const FieldsPack& fp,
+    const FieldsZoneDir& fzd,
+    uint16_t zone_id,
+    const WindowInfo& info,
+    uint32_t peer)
+{
+    const int64_t nx = info.nx;
+    int64_t bx0 = nx;
+    int64_t by0 = info.ny;
+    int64_t bx1 = -1;
+    int64_t by1 = -1;
+    ForEachCrossDrop(info, [&](int64_t, int64_t, int64_t cv, int, int, int64_t) {
+        bx0 = std::min(bx0, cv % nx);
+        by0 = std::min(by0, cv / nx);
+        bx1 = std::max(bx1, cv % nx);
+        by1 = std::max(by1, cv / nx);
+    });
+    std::vector<uint32_t> peer3;
+    if (bx0 > bx1) {
+        return peer3;
+    }
+    const int64_t pnx = bx1 - bx0 + 1;
+    size_t n_opn = 0;
+    const FieldsOpenRec* opn = fp.opensOfZone(zone_id, n_opn);
+    GridWindow pw;
+    if (!loadGridWindow(
+            gp,
+            gz,
+            &fp,
+            &fzd,
+            opn,
+            n_opn,
+            std::llround(info.x0 / kCS) + bx0,
+            std::llround(info.y0 / kCS) + by0,
+            pnx,
+            by1 - by0 + 1,
+            pw)) {
+        return peer3;
+    }
+    const SpanTable& st = info.st3;
+    peer3.assign(info.vis3.size(), 0);
+    for (size_t i = 0; i < pw.rec.size(); ++i) {
+        const GridSpanRec& r = pw.rec[i];
+        if (r.rid != peer || (r.flags & kGridFlagWalk) == 0 || (r.flags & (kGridFlagGhost | kGridFlagFill)) != 0) {
+            continue;
+        }
+        const int64_t j = st.j((by0 + r.cell / pnx) * nx + bx0 + r.cell % pnx);
+        if (j < 0) {
+            continue;
+        }
+        for (int64_t k = st.cstart(j), ke = k + st.ccnt(j); k < ke; ++k) {
+            if (info.vis3[static_cast<size_t>(k)] == 0 && st.sp_h[static_cast<size_t>(k)] == r.h) {
+                peer3[static_cast<size_t>(k)] = pw.scc[i];
+            }
+        }
+    }
+    return peer3;
+}
+
+// 候选跳点, 判据与类内下落同一套 (RiseOk 的接缝前探与碰撞体闸)。peer3 逐 span 记落脚那一类的分量号,
+// 0 = 不是那一类的可走面。同一分量只留离两端直线最近的一处: 从同一分量出发能到的地方相同。
+std::vector<DropHop> CrossDropHops(const WindowInfo& info, const std::vector<uint32_t>& peer3, const WorldPoint& s, const WorldPoint& g)
+{
+    const SpanTable& st = info.st3;
+    const int64_t nx = info.nx;
+    const auto centre = [&](int64_t c) {
+        return WorldPoint { info.x0 + (static_cast<double>(c % nx) + 0.5) * kCS, info.y0 + (static_cast<double>(c / nx) + 0.5) * kCS };
+    };
+
+    struct Cand
+    {
+        double score = 0.0;
+        int64_t u = -1;
+        int64_t v = -1;
+        int dx = 0;
+        int dy = 0;
+    };
+
+    std::vector<Cand> cand;
+    ForEachCrossDrop(info, [&](int64_t u, int64_t cu, int64_t cv, int dx, int dy, int64_t k) {
+        if (peer3[static_cast<size_t>(k)] == 0
+            || !RiseOk(st, nx, info.ny, cu, dx, dy, st.sp_h[static_cast<size_t>(u)], st.sp_h[static_cast<size_t>(k)])) {
+            return;
+        }
+        const WorldPoint a = centre(cu);
+        const WorldPoint b = centre(cv);
+        cand.push_back({ std::hypot(a.x - s.x, a.y - s.y) + std::hypot(b.x - g.x, b.y - g.y), u, k, dx, dy });
+    });
+    std::sort(cand.begin(), cand.end(), [](const Cand& p, const Cand& q) {
+        return std::tie(p.score, p.u, p.v) < std::tie(q.score, q.u, q.v);
+    });
+    const LayerOracle lyo(&st, nx, info.ny, info.x0, info.y0);
+    std::vector<DropHop> out;
+    std::vector<uint32_t> tried;
+    for (const Cand& c : cand) {
+        if (out.size() >= kDropHopTries) {
+            break;
+        }
+        const uint32_t comp = peer3[static_cast<size_t>(c.v)];
+        if (std::find(tried.begin(), tried.end(), comp) != tried.end()) {
+            continue;
+        }
+        tried.push_back(comp);
+        DropHop hop { .take = centre(st.sp_cell[static_cast<size_t>(c.u)]),
+                      .take_h = static_cast<double>(st.sp_h[static_cast<size_t>(c.u)]),
+                      .land = centre(st.sp_cell[static_cast<size_t>(c.v)]),
+                      .land_h = static_cast<double>(st.sp_h[static_cast<size_t>(c.v)]) };
+        // 落点照类内台沿下落外推, 朝跳下的方向留出它找落点的范围
+        if (info.fall_r > 0.0) {
+            const double reach = 8.0 * info.fall_r + kCS;
+            std::vector<WorldPoint> pts { hop.take, hop.land, { hop.land.x + c.dx * reach, hop.land.y + c.dy * reach } };
+            std::vector<double> hz { hop.take_h, hop.land_h, hop.land_h };
+            RouteDiag tdg;
+            tdg.clearance.assign(pts.size(), 0.0);
+            PushDropLandings(pts, hz, tdg, st, info.dist, nx, info.ny, info.x0, info.y0, info.fall_r, lyo);
+            hop.land = pts[1];
+            hop.land_h = hz[1];
+        }
+        out.push_back(hop);
+    }
+    return out;
+}
+
+// 两段接成一条: 前段止于台沿, 后段起于落点, 落点记一次台沿下落。
+RecastPlanResult JoinDropHop(RecastPlanResult a, RecastPlanResult b, double land_h)
+{
+    const size_t base = a.points.size();
+    const size_t nb = b.points.size();
+    RecastPlanResult r = std::move(a);
+    r.length += std::hypot(b.points.front().x - r.points.back().x, b.points.front().y - r.points.back().y) + b.length;
+    r.points.insert(r.points.end(), b.points.begin(), b.points.end());
+    const auto cat = [&](std::vector<double>& x, const std::vector<double>& y) {
+        if (x.size() == base && y.size() == nb) {
+            x.insert(x.end(), y.begin(), y.end());
+        }
+        else {
+            x.clear();
+        }
+    };
+    cat(r.clearance, b.clearance);
+    cat(r.heights, b.heights);
+    if (!r.waypoints.empty() && !b.waypoints.empty()) {
+        r.waypoints.push_back(base);
+        for (const size_t w : b.waypoints) {
+            r.waypoints.push_back(base + w);
+        }
+    }
+    else {
+        r.waypoints.clear();
+    }
+    r.drops.push_back({ .index = base, .height = land_h });
+    for (const DropLanding& d : b.drops) {
+        r.drops.push_back({ .index = base + d.index, .height = d.height });
+    }
+    r.snap_goal = b.snap_goal;
+    r.warnings.insert(r.warnings.end(), b.warnings.begin(), b.warnings.end());
+    r.warnings.push_back("台沿下落换类");
+    RecastPlanResult::Debug& da = r.debug;
+    const RecastPlanResult::Debug& db = b.debug;
+    da.tier_notes.insert(da.tier_notes.end(), db.tier_notes.begin(), db.tier_notes.end());
+    da.topology_cells.insert(da.topology_cells.end(), db.topology_cells.begin(), db.topology_cells.end());
+    da.topology_heights.insert(da.topology_heights.end(), db.topology_heights.begin(), db.topology_heights.end());
+    da.taut_points.insert(da.taut_points.end(), db.taut_points.begin(), db.taut_points.end());
+    da.pulled_points.insert(da.pulled_points.end(), db.pulled_points.begin(), db.pulled_points.end());
+    da.assembled_points.insert(da.assembled_points.end(), db.assembled_points.begin(), db.assembled_points.end());
+    da.planned_points = r.points;
+    da.warnings = r.warnings;
+    return r;
 }
 
 // 弦沿线的最小净空。取样与层走查同一套整数插值, 于是"弦经过哪些格"在两处判据里是同一个答案。
@@ -1846,7 +2179,23 @@ std::optional<std::vector<WorldPoint>> routeWindow(
             if (sd < 0 || (goal_deck.has_value() && gs.empty())) {
                 return std::nullopt;
             }
-            return SpanAstar(st3, use, m3, sd, gs, price, banned, bnp, faces, vis, vis != nullptr ? &corn : nullptr, &cost, jspan);
+            // 小窗里代价够到碰边线就提前升档。
+            const double give_up_at = bounded ? limit2 - (dsa + dga) / kCS + 1.0 : std::numeric_limits<double>::infinity();
+            return SpanAstar(
+                st3,
+                use,
+                m3,
+                sd,
+                gs,
+                price,
+                banned,
+                bnp,
+                faces,
+                vis,
+                vis != nullptr ? &corn : nullptr,
+                &cost,
+                jspan,
+                give_up_at);
         };
         Topo t;
         t.on3 = w3;
@@ -2530,16 +2879,16 @@ RecastNavEngine::RecastNavEngine(const BaseNavPack& pack, const BaseNavPlanner& 
     , planner_(planner)
 {
     const BaseNavSection* sec = pack_.section(kGridSectionTag);
-    if (sec == nullptr) {
+    if (sec == nullptr || sec->bytes == nullptr) {
         grid_error_ = "包里没有预烘格图段";
         return;
     }
-    if (!grid_.parse(sec->bytes.data(), sec->bytes.size(), grid_error_)) {
+    if (!grid_.parse(sec->bytes->data(), sec->bytes->size(), grid_error_)) {
         grid_ = GridPack();
         return;
     }
     // 旁包与主包同目录同名配对; 缺了或对不上就整个引擎不可用, 不退回运行期重建。
-    if (!fields_.load(FieldsSidecarPath(pack_.path()), pack_, grid_, grid_error_)) {
+    if (!LoadSharedFieldsPack(FieldsSidecarPath(pack_.path()), pack_, grid_, fields_, grid_error_)) {
         grid_ = GridPack();
         return;
     }
@@ -2573,9 +2922,9 @@ RecastNavEngine::ZoneEntry& RecastNavEngine::zoneEntry(const std::string& name)
         }
         ZoneEntry e;
         e.zc = std::make_unique<ZoneClean>(pack_, planner_, name);
-        if (const FieldsZoneDir* fzd = fields_.findZone(name); fzd != nullptr) {
+        if (const FieldsZoneDir* fzd = fields_->findZone(name); fzd != nullptr) {
             e.fz = std::make_unique<FieldsZone>();
-            if (!fields_.loadZone(*fzd, *e.fz, e.fields_error)) {
+            if (!fields_->loadZone(*fzd, *e.fz, e.fields_error)) {
                 e.fz.reset();
             }
         }
@@ -2600,7 +2949,15 @@ RecastPlanResult RecastNavEngine::plan(
     const std::function<bool()>& should_stop)
 {
     const std::lock_guard<std::mutex> lock(mutex_);
-    return planLocked(zone_name, start, goal, start_floor_y, goal_floor_y, goal_deck_y, start_deck_y, no_go_discs, should_stop);
+    RecastPlanResult res =
+        planLocked(zone_name, start, goal, start_floor_y, goal_floor_y, goal_deck_y, start_deck_y, no_go_discs, should_stop);
+    // 规划完把空闲页还给系统。
+#if defined(__APPLE__)
+    malloc_zone_pressure_relief(nullptr, 0);
+#elif defined(_WIN32)
+    _heapmin();
+#endif
+    return res;
 }
 
 void RecastNavEngine::warm(const std::string& zone_name)
@@ -2690,7 +3047,7 @@ RecastPlanResult RecastNavEngine::planLocked(
         res.error = ze.zc->error();
         return res;
     }
-    const FieldsZoneDir* fzd = fields_.findZone(zone_name);
+    const FieldsZoneDir* fzd = fields_->findZone(zone_name);
     if (fzd == nullptr || ze.fz == nullptr) {
         res.error = "旁包读不出这个区 (" + zone_name + "): " + ze.fields_error;
         return res;
@@ -2723,7 +3080,7 @@ RecastPlanResult RecastNavEngine::planLocked(
         p.x0 = static_cast<double>(gx0) * kCS;
         p.y0 = static_cast<double>(gy0) * kCS;
         size_t n_opn = 0;
-        const FieldsOpenRec* opn = fields_.opensOfZone(zc.zone_id, n_opn);
+        const FieldsOpenRec* opn = fields_->opensOfZone(zc.zone_id, n_opn);
         return loadGridWindow(grid_, *gz, nullptr, nullptr, opn, n_opn, gx0, gy0, p.nx, p.ny, p.gw);
     };
     // 定类只读取两端吸附半径内的格, 解开两个小块即可。
@@ -2809,8 +3166,7 @@ RecastPlanResult RecastNavEngine::planLocked(
 
     // 端点接不上可走层的腿在全区图上就能判掉。全区核心是任何窗口内核心的超集,
     // 量出来的锚距是窗口里那把尺子的下界,过不了这道闸的腿换多大的窗口也接不上。
-    const double zsa = coreAnchorPx(grid_, *gz, start);
-    const double zga = coreAnchorPx(grid_, *gz, goal);
+    const auto [zsa, zga] = coreAnchorPx(grid_, *gz, { start, goal });
     if (zsa > kSnapRadius || zga > kSnapRadius) {
         char buf[128];
         std::snprintf(buf, sizeof(buf), "端点接不上可走层 (起 %.1fpx / 终 %.1fpx)", zsa, zga);
@@ -2934,6 +3290,7 @@ RecastPlanResult RecastNavEngine::planLocked(
     // 可达域、禁步、留墙都从旁包读, 小窗与整类窗口在这三样上逐位相同; 小窗只剩与窗口大小
     // 有关的验收(搜索碰边、场的可信余量), 不过就扩一档, 封顶档的答案照采, 只有窗内不通才退整类。
     std::optional<WindowInfo> info;
+    const auto fall_cache = std::make_shared<FallCache>();
     int level = 0; // 椭圆档位
     bool last_resort = false;
     Rect cur;
@@ -2982,7 +3339,7 @@ RecastPlanResult RecastNavEngine::planLocked(
 
         const double t_win0 = nowMs();
         info =
-            buildWindow(grid_, *gz, fields_, *fzd, *fz, zc, seed_gx, seed_gy, seed_h, h0, region, x0, y0, x1, y1, nogo, no_go_discs, err);
+            buildWindow(grid_, *gz, *fields_, *fzd, *fz, zc, seed_gx, seed_gy, seed_h, h0, region, x0, y0, x1, y1, nogo, no_go_discs, err);
         const double window_ms = nowMs() - t_win0;
         const uint16_t zone_id = zc.zone_id;
         if (!info.has_value()) {
@@ -3000,7 +3357,7 @@ RecastPlanResult RecastNavEngine::planLocked(
             return res;
         }
         if (pz != nullptr) {
-            info->st3.fall = FallGate(solid, zc, pz->transform, x0, y0, nx);
+            info->st3.fall = FallGate(solid, zc, pz->transform, gx0, gy0, nx, fall_cache);
             info->fall_r = kFallRadius * std::fabs(static_cast<double>(pz->transform[0]));
         }
         RouteDiag dg;
@@ -3057,6 +3414,78 @@ RecastPlanResult RecastNavEngine::planLocked(
             return res;
         }
         if (std::max(dg.snap_start, dg.snap_goal) > kSnapRadius || dg.hop_barrier) {
+            // 终点在别的类里: 试从本类台沿跳进终点那一类, 前后两段各在自己的类里规划, 只接这一跳。
+            // 走得通的腿到不了这里。
+            if (!hopping_ && !dg.hop_barrier && dg.snap_start <= kSnapRadius && !gdk.has_value()) {
+                GridPatch pq;
+                const int64_t qrec = loadPatch(goal, goal, kSnapRadius, pq) ? pickStartRec(
+                                         pq.gw,
+                                         pq.nx,
+                                         pq.ny,
+                                         static_cast<int64_t>((goal.x - pq.x0) / kCS),
+                                         static_cast<int64_t>((goal.y - pq.y0) / kCS),
+                                         triHeightOf(zc.mesh, gs->tri))
+                                                                            : -1;
+                const uint32_t peer = qrec >= 0 ? pq.gw.rec[static_cast<size_t>(qrec)].rid : region;
+                pq = GridPatch {};
+                std::vector<DropHop> hops;
+                if (peer != region) {
+                    const std::vector<uint32_t> peer3 = PeerSpans(grid_, *gz, *fields_, *fzd, zone_id, *info, peer);
+                    if (!peer3.empty()) {
+                        hops = CrossDropHops(*info, peer3, start, goal);
+                    }
+                }
+                info.reset();
+
+                struct Unhop
+                {
+                    bool& f;
+
+                    ~Unhop() { f = false; }
+                };
+
+                hopping_ = true;
+                const Unhop unhop { hopping_ };
+                for (const DropHop& hop : hops) {
+                    if (should_stop && should_stop()) {
+                        break;
+                    }
+                    RecastPlanResult a = planLocked(
+                        zone_name,
+                        start,
+                        hop.take,
+                        start_floor_y,
+                        kBaseNavFloorYNone,
+                        static_cast<float>(hop.take_h),
+                        start_deck_y,
+                        no_go_discs,
+                        should_stop);
+                    if (!a.ok) {
+                        continue;
+                    }
+                    RecastPlanResult b = planLocked(
+                        zone_name,
+                        hop.land,
+                        goal,
+                        kBaseNavFloorYNone,
+                        goal_floor_y,
+                        kBaseNavFloorYNone,
+                        static_cast<float>(hop.land_h),
+                        no_go_discs,
+                        should_stop);
+                    if (!b.ok) {
+                        continue;
+                    }
+                    RecastPlanResult r = JoinDropHop(std::move(a), std::move(b), hop.land_h);
+                    r.debug.timing.total_ms = nowMs() - t_all0;
+                    return r;
+                }
+                // 试跳点途中取消的, 照取消报
+                if (should_stop && should_stop()) {
+                    res.error = "规划已取消";
+                    return res;
+                }
+            }
             // 两端都已过全区核心闸, 端点确实在可走面上, 差的是从起点出发的可达域够不着它。图铺满了
             // 整区, 这就是最终结论。
             char buf[160];
